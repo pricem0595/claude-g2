@@ -1,0 +1,24 @@
+<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<!-- SYNTHETIC: a guess at a Claude Code session transcript, until a real capture replaces it. -->
+<hierarchy rotation="0">
+  <node index="0" text="" resource-id="" class="android.widget.FrameLayout" package="com.anthropic.claude" content-desc="" clickable="false" scrollable="false" bounds="[0,0][1080,2400]">
+    <node index="0" text="" resource-id="" class="android.view.View" package="com.anthropic.claude" content-desc="" clickable="false" scrollable="false" bounds="[0,0][1080,2400]">
+      <node index="0" text="" resource-id="" class="android.widget.Button" package="com.anthropic.claude" content-desc="Back" clickable="true" scrollable="false" bounds="[24,110][156,242]" />
+      <node index="1" text="Fix login redirect" resource-id="" class="android.widget.TextView" package="com.anthropic.claude" content-desc="" clickable="false" scrollable="false" bounds="[180,140][900,212]" />
+      <node index="2" text="" resource-id="" class="android.view.View" package="com.anthropic.claude" content-desc="" clickable="false" scrollable="true" bounds="[0,260][1080,2100]">
+        <node index="0" text="The login page sends people to the old URL. Fix it." resource-id="" class="android.widget.TextView" package="com.anthropic.claude" content-desc="" clickable="false" scrollable="false" bounds="[200,280][1040,400]" />
+        <node index="1" text="I'll look at the auth handler." resource-id="" class="android.widget.TextView" package="com.anthropic.claude" content-desc="" clickable="false" scrollable="false" bounds="[40,420][1040,480]" />
+        <node index="2" text="" resource-id="" class="android.view.View" package="com.anthropic.claude" content-desc="" clickable="true" scrollable="false" bounds="[40,500][1040,580]">
+          <node index="0" text="Read src/auth.ts" resource-id="" class="android.widget.TextView" package="com.anthropic.claude" content-desc="" clickable="false" scrollable="false" bounds="[60,510][1000,570]" />
+        </node>
+        <node index="3" text="" resource-id="" class="android.view.View" package="com.anthropic.claude" content-desc="" clickable="false" scrollable="false" bounds="[40,600][1040,800]">
+          <node index="0" text="The redirect uses the old URL. Should I also update the tests?" resource-id="" class="android.widget.TextView" package="com.anthropic.claude" content-desc="" clickable="false" scrollable="false" bounds="[40,600][1040,720]" />
+          <node index="1" text="" resource-id="" class="android.widget.Button" package="com.anthropic.claude" content-desc="Copy" clickable="true" scrollable="false" bounds="[40,730][140,800]" />
+          <node index="2" text="" resource-id="" class="android.widget.Button" package="com.anthropic.claude" content-desc="Retry" clickable="true" scrollable="false" bounds="[160,730][260,800]" />
+        </node>
+      </node>
+      <node index="3" text="Reply to Claude" resource-id="" class="android.widget.EditText" package="com.anthropic.claude" content-desc="" clickable="true" scrollable="false" bounds="[24,2120][900,2300]" />
+      <node index="4" text="" resource-id="" class="android.widget.Button" package="com.anthropic.claude" content-desc="Send" clickable="true" scrollable="false" bounds="[920,2150][1056,2280]" />
+    </node>
+  </node>
+</hierarchy>

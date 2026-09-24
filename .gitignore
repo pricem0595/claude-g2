@@ -1,0 +1,36 @@
+node_modules/
+dist/
+*.ehpk
+*.png
+
+# Android
+bridge-android/.gradle/
+bridge-android/build/
+bridge-android/app/build/
+# Machine-specific SDK path
+bridge-android/local.properties
+bridge-android/.idea/
+# Signing keys, if a release key is ever added
+*.jks
+*.keystore
+keystore.properties
+
+# Local dev tools (triage and capture scripts); shared ones live in ../dev-tools
+tools/
+
+# Local working notes
+NOTES.md
+
+# Real Claude screen dumps from the dev capture sink (private conversation text)
+captures/
+bridge-android/app/src/test/resources/fixtures/local-*.xml
+
+# Local environment files (e.g. a dev pairing token)
+.env
+.env.*
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+*.log

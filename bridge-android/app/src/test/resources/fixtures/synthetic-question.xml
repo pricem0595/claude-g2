@@ -1,0 +1,28 @@
+<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<!-- SYNTHETIC: a guess at an AskUserQuestion prompt shown inside the transcript, until a real capture replaces it. -->
+<hierarchy rotation="0">
+  <node index="0" text="" resource-id="" class="android.widget.FrameLayout" package="com.anthropic.claude" content-desc="" clickable="false" scrollable="false" bounds="[0,0][1080,2400]">
+    <node index="0" text="" resource-id="" class="android.view.View" package="com.anthropic.claude" content-desc="" clickable="false" scrollable="false" bounds="[0,0][1080,2400]">
+      <node index="0" text="" resource-id="" class="android.widget.Button" package="com.anthropic.claude" content-desc="Back" clickable="true" scrollable="false" bounds="[24,110][156,242]" />
+      <node index="1" text="Add a database" resource-id="" class="android.widget.TextView" package="com.anthropic.claude" content-desc="" clickable="false" scrollable="false" bounds="[180,140][900,212]" />
+      <node index="2" text="" resource-id="" class="android.view.View" package="com.anthropic.claude" content-desc="" clickable="false" scrollable="true" bounds="[0,260][1080,2100]">
+        <node index="0" text="Before I start, one question." resource-id="" class="android.widget.TextView" package="com.anthropic.claude" content-desc="" clickable="false" scrollable="false" bounds="[40,280][1040,340]" />
+        <node index="1" text="" resource-id="" class="android.view.View" package="com.anthropic.claude" content-desc="" clickable="false" scrollable="false" bounds="[40,360][1040,1100]">
+          <node index="0" text="Which database should we use?" resource-id="" class="android.widget.TextView" package="com.anthropic.claude" content-desc="" clickable="false" scrollable="false" bounds="[40,360][1040,440]" />
+          <node index="1" text="" resource-id="" class="android.view.View" package="com.anthropic.claude" content-desc="" clickable="true" scrollable="false" bounds="[40,460][1040,620]">
+            <node index="0" text="Postgres" resource-id="" class="android.widget.TextView" package="com.anthropic.claude" content-desc="" clickable="false" scrollable="false" bounds="[60,470][1000,530]" />
+            <node index="1" text="Relational, runs as a server" resource-id="" class="android.widget.TextView" package="com.anthropic.claude" content-desc="" clickable="false" scrollable="false" bounds="[60,540][1000,600]" />
+          </node>
+          <node index="2" text="" resource-id="" class="android.view.View" package="com.anthropic.claude" content-desc="" clickable="true" scrollable="false" bounds="[40,640][1040,800]">
+            <node index="0" text="SQLite" resource-id="" class="android.widget.TextView" package="com.anthropic.claude" content-desc="" clickable="false" scrollable="false" bounds="[60,650][1000,710]" />
+            <node index="1" text="A single file, no server" resource-id="" class="android.widget.TextView" package="com.anthropic.claude" content-desc="" clickable="false" scrollable="false" bounds="[60,720][1000,780]" />
+          </node>
+          <node index="3" text="" resource-id="" class="android.view.View" package="com.anthropic.claude" content-desc="" clickable="true" scrollable="false" bounds="[40,820][1040,900]">
+            <node index="0" text="Other" resource-id="" class="android.widget.TextView" package="com.anthropic.claude" content-desc="" clickable="false" scrollable="false" bounds="[60,830][1000,890]" />
+          </node>
+        </node>
+      </node>
+      <node index="3" text="Reply to Claude" resource-id="" class="android.widget.EditText" package="com.anthropic.claude" content-desc="" clickable="true" scrollable="false" bounds="[24,2120][900,2300]" />
+    </node>
+  </node>
+</hierarchy>

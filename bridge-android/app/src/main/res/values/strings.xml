@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Claude G2 Bridge</string>
+    <string name="service_label">Claude G2 mirror</string>
+    <string name="service_description">Shows the Claude app\'s screen on your Even G2 glasses, and taps prompt options you pick on the glasses. It only reads the Claude app, and only serves it to apps on this phone that have the pairing token.</string>
+</resources>

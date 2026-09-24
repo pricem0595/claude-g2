@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Claude G2</title>
+    <style>
+      :root { color-scheme: light dark; --accent: #fef991; }
+      body { margin: 0; padding: 24px 16px; font: 15px/1.5 system-ui, sans-serif; background: #fff; color: #111; }
+      @media (prefers-color-scheme: dark) { body { background: #111; color: #eee; } }
+      h1 { font-size: 20px; margin: 0 0 8px; }
+      p { margin: 0 0 12px; }
+      code { font-size: 13px; }
+      small { opacity: 0.7; }
+      label { display: block; margin: 16px 0 4px; font-weight: 600; }
+      .row { display: flex; gap: 8px; }
+      input { flex: 1; min-width: 0; font: 18px ui-monospace, monospace; padding: 8px; text-transform: uppercase; }
+      button { font: inherit; padding: 8px 14px; border: 0; border-radius: 8px; background: var(--accent); color: #111; }
+    </style>
+  </head>
+  <body>
+    <h1>Claude G2</h1>
+    <p>Shows the Claude app on your G2 glasses. Keep the <b>Claude G2 Bridge</b> app installed with
+      its accessibility service on, and leave a Claude Code session open in the Claude app.</p>
+    <p>On the glasses: scroll to move through prompt options and tap to pick one. In a session,
+      scroll to read back, tap to jump to the latest, and double-tap to go back to the session list.</p>
+    <label for="token">Pairing token (shown in the bridge app)</label>
+    <div class="row">
+      <input id="token" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCDE" />
+      <button id="save-token" type="button">Save</button>
+    </div>
+    <p><small>Bridge: <code id="bridge-url"></code> · <span id="bridge-state">checking...</span></small></p>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

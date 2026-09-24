@@ -1,0 +1,24 @@
+{
+  "name": "claude-g2",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "bridge": "cd bridge-android && gradlew testDebugUnitTest --tests \"*DesktopBridge*\" --rerun -Dbridge.serve=true",
+    "simulate": "evenhub-simulator --automation-port 9898 http://localhost:5173",
+    "pack": "npm run build && evenhub pack app.json dist -o claude-g2.ehpk"
+  },
+  "dependencies": {
+    "@evenrealities/even_hub_sdk": "0.0.15",
+    "@evenrealities/pretext": "0.1.4"
+  },
+  "devDependencies": {
+    "@evenrealities/evenhub-cli": "0.1.14",
+    "@evenrealities/evenhub-simulator": "0.9.5",
+    "typescript": "5.9.3",
+    "vite": "8.3.0"
+  }
+}
