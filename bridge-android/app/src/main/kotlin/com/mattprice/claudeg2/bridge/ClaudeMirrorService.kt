@@ -10,6 +10,7 @@ import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.os.Handler
 import android.os.HandlerThread
+import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
 import android.view.View
@@ -55,6 +56,10 @@ class ClaudeMirrorService : AccessibilityService(), ScreenSource {
     /** When the glasses app last reached the bridge, in epoch ms; 0 if never since it started. */
     val lastGlassesContact: Long get() = server?.lastRequestAt ?: 0L
     private var overlay: View? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    /** The Claude app is on screen (not locked, not in the background). The overlay only applies then. */
+    @Volatile private var claudeInFront = false
 
     /** Live nodes from the latest capture, by UiNode id, so taps reach the real control. */
     @Volatile private var liveNodes: Map<String, AccessibilityNodeInfo> = emptyMap()
@@ -90,7 +95,7 @@ class ClaudeMirrorService : AccessibilityService(), ScreenSource {
             _state.value = ServiceState(error = "Port $BRIDGE_PORT is in use")
         }
         instance = this
-        applyKeepAwake()
+        applyOverlay()
         handler.post(poll)
     }
 
@@ -126,17 +131,37 @@ class ClaudeMirrorService : AccessibilityService(), ScreenSource {
         super.onDestroy()
     }
 
-    /** Re-applies the keep-screen-on setting after the bridge app changes it. */
-    fun applyKeepAwake() {
-        val view = overlay ?: return addOverlay()
-        runCatching { getSystemService(WindowManager::class.java).updateViewLayout(view, overlayParams()) }
+    /**
+     * Adds, updates or removes the overlay to match the settings and whether the Claude app is
+     * on screen. Call after the bridge app changes a setting. Runs on the main thread, which
+     * owns the overlay.
+     */
+    fun applyOverlay() {
+        mainHandler.post {
+            val wanted = claudeInFront && (settings.lockPortrait || settings.keepAwake)
+            val view = overlay
+            when {
+                !wanted -> removeOverlay()
+                view == null -> addOverlay()
+                else -> runCatching { getSystemService(WindowManager::class.java).updateViewLayout(view, overlayParams()) }
+            }
+        }
+    }
+
+    private fun setClaudeInFront(inFront: Boolean) {
+        if (claudeInFront == inFront) return
+        claudeInFront = inFront
+        applyOverlay()
     }
 
     private fun captureNow() {
         val locked = isLocked()
         controller.onLockState(locked)
         // Behind the lock screen the Claude window isn't there; keep the last screen as it was.
-        if (locked) return
+        if (locked) {
+            setClaudeInFront(false)
+            return
+        }
         val pkg = settings.claudePackage
         val root = try {
             windows.asSequence()
@@ -147,6 +172,7 @@ class ClaudeMirrorService : AccessibilityService(), ScreenSource {
             Log.w(TAG, "Couldn't read windows", e)
             null
         }
+        setClaudeInFront(root != null)
         if (root == null) {
             controller.onSnapshot(null)
             return
@@ -237,9 +263,10 @@ class ClaudeMirrorService : AccessibilityService(), ScreenSource {
     }
 
     /**
-     * A 1x1 invisible overlay, present while the service runs. It asks for portrait, so the
-     * phone doesn't rotate the Claude app into a landscape layout the parser has never seen,
-     * and, if that setting is on, holds the screen on.
+     * A 1x1 invisible overlay, present only while the Claude app is on screen. With those
+     * settings on, it asks for portrait, so the phone doesn't rotate the Claude app into a
+     * landscape layout the parser has never seen, and holds the screen on. Other apps are never
+     * affected: before v0.3 it stayed up while the service ran, locking the whole phone.
      */
     private fun overlayParams() = WindowManager.LayoutParams(
         1, 1,
@@ -248,7 +275,10 @@ class ClaudeMirrorService : AccessibilityService(), ScreenSource {
             WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
             (if (settings.keepAwake) WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON else 0),
         PixelFormat.TRANSLUCENT,
-    ).apply { screenOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT }
+    ).apply {
+        screenOrientation =
+            if (settings.lockPortrait) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    }
 
     private fun addOverlay() {
         if (overlay != null) return

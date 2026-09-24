@@ -28,10 +28,18 @@ class BridgeSettings(private val prefs: SharedPreferences) {
         get() = prefs.getString("package", null) ?: ClaudeUi.DEFAULT_PACKAGE
         set(value) = prefs.edit().putString("package", value.trim()).apply()
 
-    /** Keep the screen on while the service runs, so the Claude app keeps drawing. */
+    /** Keep the screen on while the Claude app is on screen, so it keeps drawing. */
     var keepAwake: Boolean
         get() = prefs.getBoolean("keepAwake", true)
         set(value) = prefs.edit().putBoolean("keepAwake", value).apply()
+
+    /**
+     * Hold the Claude app in portrait while it's on screen: in landscape its layout is one the
+     * parser has never seen. Other apps rotate freely.
+     */
+    var lockPortrait: Boolean
+        get() = prefs.getBoolean("lockPortrait", true)
+        set(value) = prefs.edit().putBoolean("lockPortrait", value).apply()
 
     private fun newToken(): String {
         val random = SecureRandom()

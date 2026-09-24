@@ -127,28 +127,16 @@ class MainActivity : Activity() {
         )
 
         // 4. Keep it running.
-        val keepAwake = Switch(this).apply {
-            text = "Keep the screen on while mirroring"
-            textSize = 15f
-            isChecked = settings.keepAwake
-            // On: the same green as the ✓ lines; the theme's default was too dark to read as on.
-            val checked = intArrayOf(android.R.attr.state_checked)
-            thumbTintList = ColorStateList(arrayOf(checked, intArrayOf()), intArrayOf(DONE, Color.LTGRAY))
-            trackTintList = ColorStateList(
-                arrayOf(checked, intArrayOf()),
-                intArrayOf(Color.argb(140, Color.red(DONE), Color.green(DONE), Color.blue(DONE)), Color.GRAY),
-            )
-            setOnCheckedChangeListener { _, on ->
-                settings.keepAwake = on
-                ClaudeMirrorService.instance?.applyKeepAwake()
-            }
-        }
+        val keepAwake = setting("Keep the screen on", settings.keepAwake) { settings.keepAwake = it }
+        val lockPortrait = setting("Keep the Claude app in portrait", settings.lockPortrait) { settings.lockPortrait = it }
         val step4 = step(
             4, "Keep it running",
-            "While the mirror is on, the phone stays in portrait and, with this switch on, " +
-                "awake, so the Claude app keeps drawing. If the phone locks, the glasses switch to " +
-                "notification-only mode until you unlock it.",
+            "These apply only while the Claude app is on screen; other apps rotate and sleep as " +
+                "usual. Keeping it awake lets it keep drawing; in landscape the glasses can't read " +
+                "it. If the phone locks, the glasses switch to notification-only mode until you " +
+                "unlock it.",
             keepAwake,
+            lockPortrait,
         )
 
         val footer = text(
@@ -211,6 +199,24 @@ class MainActivity : Activity() {
             service == null -> status(claudeStatus, TODO, "• Turn on the mirror first")
             seen != null && seen != ScreenKind.UNKNOWN -> status(claudeStatus, DONE, "✓ The Claude app is mirrored")
             else -> status(claudeStatus, TODO, "• Waiting for the Claude app")
+        }
+    }
+
+    /** An on/off setting that the mirror applies at once. */
+    private fun setting(label: String, value: Boolean, save: (Boolean) -> Unit) = Switch(this).apply {
+        text = label
+        textSize = 15f
+        isChecked = value
+        // On: the same green as the ✓ lines; the theme's default was too dark to read as on.
+        val checked = intArrayOf(android.R.attr.state_checked)
+        thumbTintList = ColorStateList(arrayOf(checked, intArrayOf()), intArrayOf(DONE, Color.LTGRAY))
+        trackTintList = ColorStateList(
+            arrayOf(checked, intArrayOf()),
+            intArrayOf(Color.argb(140, Color.red(DONE), Color.green(DONE), Color.blue(DONE)), Color.GRAY),
+        )
+        setOnCheckedChangeListener { _, on ->
+            save(on)
+            ClaudeMirrorService.instance?.applyOverlay()
         }
     }
 
