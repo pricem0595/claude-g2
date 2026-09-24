@@ -63,3 +63,9 @@ Everything specific to the Claude app's layout is in
 
 The `real-*` fixtures are captures from the Claude app with their text replaced by
 "Text N lorem ipsum". The `synthetic-*` ones are hand-written stand-ins.
+
+## License
+
+[PolyForm Noncommercial 1.0.0](LICENSE): free to use, change and share for any noncommercial
+purpose; commercial use is not permitted. This is an independent project, not made by or
+affiliated with Anthropic or Even Realities.
