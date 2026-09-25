@@ -3,7 +3,7 @@
 Claude Code Remote Control sessions on Even Realities G2 glasses, with no computer on your side.
 It mirrors the **Claude Android app**: whatever the app shows (the session list, a live
 transcript, a permission or question prompt) is shown on the glasses. Picking a prompt option on
-the glasses taps it in the app.
+the glasses taps it in the app, and you can dictate messages to a session by voice.
 
 ```
 Claude app  ←reads / taps←  Claude G2 Bridge (accessibility service)  ←HTTP on 127.0.0.1:8421←
@@ -20,64 +20,57 @@ app stays signed in, and this only reads its screen.
 | where | scroll | tap | double-tap | hold |
 | --- | --- | --- | --- | --- |
 | Session list | move the highlight | open that session | close the app | |
-| Transcript | one line back / forward (past what's loaded, scrolls the phone to load older or newer messages) | jump to the newest message, scrolling the phone there too | back to the session list | **dictate a message**: speak while holding, release to see the text |
-| Voice popup | | **send the text to the session** | cancel, nothing is sent | record again |
+| Transcript | one line back / forward (past what's loaded, scrolls the phone to load older or newer messages) | jump to the newest message, scrolling the phone there too | back to the session list | **dictate a message** (see below) |
+| Voice card | | **send the text to the session** | cancel, nothing is sent | record again |
 | Prompt (permission or question) | move through the options | **pick the highlighted option** | nothing, so a stray double-tap can't dismiss a prompt | |
 | Error screen | | retry | close the app | |
 
-Dictation records with the glasses' microphones. The phone's own speech recognizer turns the
-recording into text: Android's on-device one when the phone has it, so the audio stays on the
-phone. Nothing is sent until you tap.
+## Voice dictation
+
+In a session, send Claude a message without touching the phone:
+
+1. **Hold** the touchpad and speak. A card opens over the lower part of the screen with the
+   recording time; the session stays visible, dimmed, above it.
+2. **Let go** when you're done. The card shows what you said.
+3. **Tap** to send it to the session, or **double-tap** to throw it away. Hold again to record
+   it over.
+
+- A recording can be up to **60 seconds**; it stops by itself at the limit.
+- Recording carries on for a moment after you let go, so the last word isn't cut off.
+- If nothing was heard, the card says *Didn't catch that*: hold to try again, or double-tap to
+  close.
+- Dictation only works inside a session, where the Claude app has a message box.
+
+The glasses' microphones do the recording, and the phone's own speech recognizer turns it into
+text as you speak: Android's on-device one when the phone has it, so the audio stays on the phone.
+Nothing is sent until you tap.
+
+## Locking the phone screen
 
 The bridge keeps the phone awake while the Claude app is on screen, so in a pocket it can take
 stray touches. While the Claude app is in front, a small lock button sits in the top right
-corner: **hold it** to lock the screen against touches, hold it again to unlock. The glasses
-keep working while it's locked, and the keyboard stays hidden. The system's own gestures (the
-navigation bar, the notification shade) can't be blocked.
+corner: **hold it** to lock the screen against touches, and hold it again to unlock. The glasses
+keep working while it's locked, dictation included, and the keyboard stays hidden. The system's
+own gestures (the navigation bar, the notification shade) can't be blocked.
 
-## Setup (Android only)
+## Setup (Android 13+ only)
 
-1. Build and install the bridge. You need a JDK 17+ as `JAVA_HOME`:
-   `cd bridge-android && gradlew assembleDebug`, then
-   `adb install app/build/outputs/apk/debug/app-debug.apk`.
+1. Download `claude-g2-bridge-<version>.apk` from
+   [Releases](https://github.com/pricem0595/claude-g2/releases) on the phone and open it. Allow
+   installing from that app when Android asks.
 2. Open **Claude G2 Bridge**. Tap *Open Accessibility settings* and turn on **Claude G2 mirror**.
    Android 13+ blocks sideloaded accessibility services at first. If it does, open app info,
    choose ⋮ → *Allow restricted settings*, and try again.
-3. Load the glasses app. For development, run `npm run dev` and then
-   `npx evenhub qr --url http://<pc-ip>:5173 --external`. For no PC at all, use `npm run pack`
-   and install the `.ehpk`.
+3. Get the **Claude G2** glasses app from the **Even Hub** in the Even app.
 4. On the glasses app's phone page, enter the pairing token the bridge shows.
 5. Open a Claude Code session in the Claude app and leave it on screen. The bridge keeps the
    screen on while it runs; you can turn that off.
 6. Dictation needs no setup. Only if it reports a missing microphone permission, tap *Allow
    microphone* on the bridge's step 5 (the sound still comes from the glasses).
 
-## Development
-
-| what | command |
-| --- | --- |
-| Bridge unit tests | `cd bridge-android && gradlew testDebugUnitTest` |
-| Signed release APK | `gradlew assembleRelease`. The key stays out of the repo: put `claudeG2.signing=<path to a .properties file>` in `~/.gradle/gradle.properties`, with `storeFile`, `storePassword`, `keyAlias` and `keyPassword` in that file. Without it the release APK is unsigned. |
-| Bridge on this PC (replays the fixture screens; token `ABCDE`) | `npm run bridge` |
-| Glasses app against it | `set VITE_BRIDGE_TOKEN=ABCDE && npm run dev`, then `npm run simulate` |
-| Dictation in the simulator | It can't long-press, so start it with `npx evenhub-simulator --automation-port 9898 "http://localhost:5173/?voice-demo"`. Once a session is open, the dev build holds, records 1.5 s and releases by itself; then tap to send or double-tap to cancel. The desktop bridge hears any recording as "List the files in src". |
-| Drive the simulator | `npm run simulate` starts it with an automation port: `POST http://127.0.0.1:9898/api/input` with `{"action":"down"}` (or `up`, `click`, `double_click`), `GET /api/screenshot/glasses` |
-| Bridge on this PC, one long pretend session (for scrolling) | `gradlew testDebugUnitTest --tests "*DesktopBridge*" --rerun -Dbridge.serve=true -Dbridge.scenario=long`; add `-Dbridge.page=6 -Dbridge.steps=1` for whole-screen jumps with no in-between frames, the worst case. Dev builds log each transcript redraw to the console as `[claude-g2] frame …`. |
-
-### When the Claude app changes and the mirror misreads a screen
-
-Everything specific to the Claude app's layout is in
-`bridge-android/app/src/main/kotlin/.../ScreenParser.kt` (`ClaudeUi` and `ScreenParser`).
-
-1. Capture the screen: `adb shell uiautomator dump`, or with the Claude app open, the bridge's
-   `/dump` endpoint (`adb forward tcp:18421 tcp:8421`, then `curl -H "Authorization: Bearer <token>" http://127.0.0.1:18421/dump`).
-2. **Replace the conversation text before committing it**: captures contain your messages,
-   session titles and repository names.
-3. Add it to `bridge-android/app/src/test/resources/fixtures/`, write a test in
-   `ScreenParserTest`, and adjust the parser until it passes.
-
-The `real-*` fixtures are captures from the Claude app with their text replaced by
-"Text N lorem ipsum". The `synthetic-*` ones are hand-written stand-ins.
+**Upgrading from a bridge you built yourself:** release builds are signed with the project's key,
+so Android won't install one over a self-built copy. Uninstall the old bridge first, then repeat
+steps 2 and 4.
 
 ## License
 
