@@ -6,6 +6,9 @@ interface ImportMetaEnv {
   readonly VITE_BRIDGE_TOKEN?: string
 }
 
+/** The app's version, from app.json at build time (see vite.config.ts). */
+declare const __APP_VERSION__: string
+
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
