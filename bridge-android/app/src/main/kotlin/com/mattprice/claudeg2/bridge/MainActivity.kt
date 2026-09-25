@@ -1,9 +1,7 @@
 package com.mattprice.claudeg2.bridge
 
-import android.Manifest
 import android.app.Activity
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
@@ -27,6 +25,9 @@ private const val REFRESH_MS = 1_000L
 
 // The glasses app long-polls every 25 s at most, so older than this means it isn't running.
 private const val GLASSES_SEEN_MS = 40_000L
+
+/** The Even Realities app (Google Play id), which records for the glasses and holds the mic permission. */
+private const val EVEN_APP_PACKAGE = "com.even.sg"
 
 private val DONE = Color.parseColor("#4CAF50")
 private val TODO = Color.parseColor("#FFB300")
@@ -53,7 +54,6 @@ class MainActivity : Activity() {
     private lateinit var glassesStatus: TextView
     private lateinit var claudeStatus: TextView
     private lateinit var voiceStatus: TextView
-    private lateinit var micButton: View
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -145,15 +145,19 @@ class MainActivity : Activity() {
 
         // 5. Voice messages.
         voiceStatus = text("", 15f, bold = true)
-        micButton = button("Allow microphone", secondary = true) { requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 1) }
         val step5 = step(
             5, "Voice messages",
             "Hold the glasses' touchpad in a session to dictate a message. The glasses record it " +
                 "and this phone's own speech recognizer turns it into text, on the phone when it " +
-                "can. Nothing to set up. Only if dictation says the microphone permission is " +
-                "missing, allow it below; the sound still comes from the glasses.",
+                "can. The recording comes through the Even app, so it's the Even app that needs " +
+                "the microphone permission; this app doesn't.",
             voiceStatus,
-            micButton,
+            button("Open the Even app's permissions", secondary = true) {
+                // Its app info page, where Permissions > Microphone is.
+                runCatching {
+                    startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$EVEN_APP_PACKAGE")))
+                }
+            },
         )
 
         val footer = text(
@@ -218,8 +222,6 @@ class MainActivity : Activity() {
             else -> status(claudeStatus, TODO, "• Waiting for the Claude app")
         }
 
-        val micAllowed = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-        micButton.visibility = if (micAllowed) View.GONE else View.VISIBLE
         val speech = service?.transcriber
         when {
             speech == null -> status(voiceStatus, TODO, "• Turn on the mirror first")
