@@ -116,8 +116,18 @@ export const api = {
   scroll: (dir: 'up' | 'down' | 'latest') => call('POST', '/action', { type: 'scroll', dir }, dir === 'latest' ? 20000 : 8000),
   back: () => call('POST', '/action', { type: 'back' }),
 
-  /** Speech to text on the phone. `pcm` is 16 kHz 16-bit mono; "" when no words were heard. */
-  transcribe: async (pcm: Uint8Array) => (await call<{ text: string }>('POST', '/voice/transcribe', pcm, 25000)).text,
+  // Speech to text on the phone, streamed: start when recording starts, send the audio (16 kHz
+  // 16-bit mono) as it's recorded, and finish on release for the text, "" when no words were
+  // heard. The phone's recognizer drops audio that arrives faster than real time.
+  voiceStart: async () => (await call<{ id: string }>('POST', '/voice/start')).id,
+  voiceAudio: async (id: string, pcm: Uint8Array) => {
+    await call('POST', `/voice/audio?id=${encodeURIComponent(id)}`, pcm)
+  },
+  voiceFinish: async (id: string) =>
+    (await call<{ text: string }>('POST', `/voice/finish?id=${encodeURIComponent(id)}`, undefined, 25000)).text,
+  voiceCancel: async (id: string) => {
+    await call('POST', `/voice/cancel?id=${encodeURIComponent(id)}`)
+  },
   /** Types `text` into the open session's message box and taps Send. */
   send: (text: string) => call('POST', '/action', { type: 'send', text }, 10000),
 }

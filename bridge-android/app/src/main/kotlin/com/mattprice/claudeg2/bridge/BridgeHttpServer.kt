@@ -116,6 +116,43 @@ class BridgeHttpServer(
                 JSONObject()
             }
 
+            // Streaming: start when recording starts, send audio as it's recorded, finish on
+            // release. The recognizer keeps up with live audio, so the text is ready at once.
+            "POST /voice/start" -> {
+                val speech = transcriber ?: throw BridgeException(503, "No speech recognizer on this phone")
+                val id = java.util.UUID.randomUUID().toString()
+                val started = speech.start()
+                synchronized(this) {
+                    recording?.session?.cancel()
+                    recording = Recording(id, started)
+                }
+                JSONObject().put("id", id)
+            }
+
+            "POST /voice/audio" -> {
+                val pcm = readPcm(session)
+                val current = currentRecording(query("id"))
+                current.bytes += pcm.size
+                if (current.bytes > MAX_PCM_BYTES) {
+                    endRecording(current)?.cancel()
+                    throw BridgeException(413, "Recording too long")
+                }
+                current.session.write(pcm)
+                JSONObject()
+            }
+
+            "POST /voice/finish" -> {
+                val current = currentRecording(query("id"))
+                endRecording(current)
+                JSONObject().put("text", current.session.finish())
+            }
+
+            "POST /voice/cancel" -> {
+                synchronized(this) { recording?.takeIf { it.id == query("id") } }?.let { endRecording(it)?.cancel() }
+                JSONObject()
+            }
+
+            // A whole recording at once, for testing over adb.
             "POST /voice/transcribe" -> {
                 val pcm = readPcm(session)
                 val speech = transcriber ?: throw BridgeException(503, "No speech recognizer on this phone")
@@ -125,6 +162,27 @@ class BridgeHttpServer(
             "GET /dump" -> Raw(200, "text/xml", controller.lastSnapshot?.toXml() ?: throw BridgeException(409, "Nothing captured yet"))
 
             else -> throw BridgeException(404, "Unknown endpoint")
+        }
+    }
+
+    /** The recording being streamed now; one at a time, and a new one replaces it. */
+    private class Recording(val id: String, val session: SpeechSession) {
+        @Volatile var bytes = 0L
+    }
+
+    private var recording: Recording? = null
+
+    private fun currentRecording(id: String?): Recording = synchronized(this) {
+        recording?.takeIf { it.id == id }
+    } ?: throw BridgeException(410, "That recording is over")
+
+    /** Stops tracking [current], returning its session if it was still the current one. */
+    private fun endRecording(current: Recording): SpeechSession? = synchronized(this) {
+        if (recording === current) {
+            recording = null
+            current.session
+        } else {
+            null
         }
     }
 

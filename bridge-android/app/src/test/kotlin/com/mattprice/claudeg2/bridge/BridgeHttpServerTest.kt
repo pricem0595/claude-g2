@@ -16,7 +16,14 @@ const val TEST_TOKEN = "ABCDE"
 const val FAKE_SPEECH = "List the files in src"
 
 /** Pretend speech-to-text: a fixed sentence for any recording, nothing for silence (all zeros). */
-val fakeTranscriber = Transcriber { pcm -> if (pcm.all { it == 0.toByte() }) "" else FAKE_SPEECH }
+val fakeTranscriber = object : Transcriber {
+    override fun start() = object : SpeechSession {
+        private val audio = java.io.ByteArrayOutputStream()
+        override fun write(pcm: ByteArray) = audio.write(pcm)
+        override suspend fun finish() = if (audio.toByteArray().all { it == 0.toByte() }) "" else FAKE_SPEECH
+        override fun cancel() = Unit
+    }
+}
 
 /** Starts a real bridge on this machine, backed by the pretend Claude app on its session list. */
 fun startBridge(port: Int, longPollMs: Long = LONG_POLL_MS): Pair<BridgeHttpServer, FakeClaude> {
@@ -218,8 +225,36 @@ class BridgeHttpServerTest {
         assertEquals(fixture("synthetic-sessions"), UiNode.fromXml(xml))
     }
 
-    private fun postPcm(pcm: ByteArray): Reply {
-        val connection = URI("http://127.0.0.1:$port/voice/transcribe").toURL().openConnection() as HttpURLConnection
+    @Test
+    fun `a recording streamed in pieces comes back as text when finished`() {
+        val id = call("POST", "/voice/start").json!!.getString("id")
+        repeat(3) { assertEquals(200, postPcm(ByteArray(PCM_BYTES_PER_SECOND / 4) { (it % 7).toByte() }, "/voice/audio?id=$id").status) }
+        val done = call("POST", "/voice/finish?id=$id")
+        assertEquals(200, done.status)
+        assertEquals(FAKE_SPEECH, done.json!!.getString("text"))
+        // Finished recordings take no more audio.
+        assertEquals(410, postPcm(ByteArray(10), "/voice/audio?id=$id").status)
+    }
+
+    @Test
+    fun `a new recording replaces the old one, and a cancelled one is gone`() {
+        val first = call("POST", "/voice/start").json!!.getString("id")
+        val second = call("POST", "/voice/start").json!!.getString("id")
+        assertEquals(410, postPcm(ByteArray(10) { 1 }, "/voice/audio?id=$first").status)
+        assertEquals(200, call("POST", "/voice/cancel?id=$second").status)
+        assertEquals(410, call("POST", "/voice/finish?id=$second").status)
+    }
+
+    @Test
+    fun `a streamed recording over a minute is refused`() {
+        val id = call("POST", "/voice/start").json!!.getString("id")
+        assertEquals(200, postPcm(ByteArray(MAX_PCM_BYTES), "/voice/audio?id=$id").status)
+        assertEquals(413, postPcm(ByteArray(2), "/voice/audio?id=$id").status)
+        assertEquals(410, call("POST", "/voice/finish?id=$id").status)
+    }
+
+    private fun postPcm(pcm: ByteArray, path: String = "/voice/transcribe"): Reply {
+        val connection = URI("http://127.0.0.1:$port$path").toURL().openConnection() as HttpURLConnection
         connection.requestMethod = "POST"
         connection.setRequestProperty("Authorization", "Bearer $TEST_TOKEN")
         connection.setRequestProperty("Content-Type", "application/octet-stream")

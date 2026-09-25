@@ -2,7 +2,7 @@
 // The Claude app decides what's on screen; this only follows it.
 
 import { api, BridgeError, type Choice, type MirrorState } from './api/bridge'
-import { QUESTION_LINES, QUESTION_WIDTH, type Glasses } from './glasses'
+import { QUESTION_LINES, QUESTION_WIDTH, type Backdrop, type Glasses } from './glasses'
 import { wrap } from './text'
 import { Transcript } from './transcript'
 
@@ -92,6 +92,11 @@ export class Mirror {
   setOverlay(on: boolean): Promise<void> {
     this.overlay = on
     return on ? this.drawing : this.redraw()
+  }
+
+  /** The session on screen, for the voice card to be drawn over. */
+  backdrop(): Backdrop {
+    return { title: this.title, status: this.transcript.status(), lines: this.transcript.visible().split('\n') }
   }
 
   /** Dictating a message only makes sense inside a session, where there's a message box. */

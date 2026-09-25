@@ -57,6 +57,9 @@ class ClaudeMirrorService : AccessibilityService(), ScreenSource {
     /** When the glasses app last reached the bridge, in epoch ms; 0 if never since it started. */
     val lastGlassesContact: Long get() = server?.lastRequestAt ?: 0L
     private var overlay: View? = null
+
+    /** The lock button and input shield over the Claude app; main thread only. */
+    private var inputLock: InputLock? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
     /** The Claude app is on screen (not locked, not in the background). The overlay only applies then. */
@@ -102,6 +105,13 @@ class ClaudeMirrorService : AccessibilityService(), ScreenSource {
             _state.value = ServiceState(error = "Port $BRIDGE_PORT is in use")
         }
         instance = this
+        // While the shield is up, keep the on-screen keyboard away too: nothing in a pocket
+        // should be able to type. Back to normal as soon as it's unlocked or Claude is left.
+        inputLock = InputLock(this) { shielded ->
+            softKeyboardController.setShowMode(
+                if (shielded) SHOW_MODE_HIDDEN else SHOW_MODE_AUTO,
+            )
+        }
         applyOverlay()
         handler.post(poll)
     }
@@ -133,6 +143,8 @@ class ClaudeMirrorService : AccessibilityService(), ScreenSource {
         server?.stop()
         server = null
         removeOverlay()
+        inputLock?.hide()
+        inputLock = null
         if (::worker.isInitialized) worker.quitSafely()
         _state.value = ServiceState()
         super.onDestroy()
@@ -159,6 +171,7 @@ class ClaudeMirrorService : AccessibilityService(), ScreenSource {
         if (claudeInFront == inFront) return
         claudeInFront = inFront
         applyOverlay()
+        mainHandler.post { inputLock?.show(inFront) }
     }
 
     private fun captureNow() {
@@ -264,7 +277,15 @@ class ClaudeMirrorService : AccessibilityService(), ScreenSource {
         return true
     }
 
-    private suspend fun tap(x: Float, y: Float): Boolean {
+    override suspend fun clearFocus(node: UiNode) {
+        liveNodes[node.id]?.takeIf { it.refresh() }?.performAction(AccessibilityNodeInfo.ACTION_CLEAR_FOCUS)
+    }
+
+    /** An injected touch lands on the input shield like any other, so it's let through for this one. */
+    private suspend fun tap(x: Float, y: Float): Boolean =
+        inputLock?.letThrough { injectTap(x, y) } ?: injectTap(x, y)
+
+    private suspend fun injectTap(x: Float, y: Float): Boolean {
         val gesture = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(Path().apply { moveTo(x, y) }, 0, 50))
             .build()

@@ -49,11 +49,40 @@ export const MAX_LIST_ITEMS = 20
 const MAX_ITEM_BYTES = 60
 const ITEM_WIDTH = WIDTH - 40
 
+// The card: a bordered box over the lower part of the screen. The glasses can't fill a
+// background, so anything behind it would show through; instead the page behind is redrawn
+// dimmed and cut to the lines that fit above the card.
+const CARD_Y = 96
+const CARD_MARGIN = 12
+const CARD_PADDING = 8
+const CARD_BORDER = 2
+const CARD_HEIGHT = HEIGHT - CARD_Y - 6
+/** Text lines inside the card, and how wide they may be. */
+export const CARD_LINES = Math.floor((CARD_HEIGHT - 2 * (CARD_PADDING + CARD_BORDER)) / LINE_HEIGHT)
+export const CARD_WIDTH = WIDTH - 2 * CARD_MARGIN - 2 * (CARD_PADDING + CARD_BORDER) - 12
+/**
+ * Lines of the page behind that fit above the card. Its padding is tighter than the body's:
+ * two lines with the body's padding overflowed, and the glasses drew a scroll bar.
+ */
+const BACKDROP_PADDING = 2
+export const BACKDROP_LINES = Math.floor((CARD_Y - CONTENT_Y - 2 * BACKDROP_PADDING) / LINE_HEIGHT)
+/** Brightness (0-4) of the page behind the card. */
+const DIM = 1
+
 const TITLE = { containerID: 1, containerName: 'title' }
 const STATUS = { containerID: 2, containerName: 'status' }
 const LIST = { containerID: 3, containerName: 'list' }
 const BODY = { containerID: 4, containerName: 'body' }
 const QUESTION = { containerID: 5, containerName: 'question' }
+const CARD = { containerID: 6, containerName: 'card' }
+
+/** What the card is drawn over: the page it covers, dimmed. */
+export interface Backdrop {
+  title: string
+  status: string
+  /** Body lines, already wrapped; the last ones that fit above the card are shown. */
+  lines: string[]
+}
 
 export type PageKind = 'text' | 'list'
 
@@ -151,6 +180,46 @@ export class Glasses {
     })
     const listY = QUESTION_HEIGHT + 2
     return this.render('list', [text], [this.list(listY, HEIGHT - listY, options)])
+  }
+
+  /**
+   * A bordered card over the lower part of the screen, with the page it covers dimmed above
+   * it. The card takes the input.
+   */
+  showCard(backdrop: Backdrop, text: string): Promise<void> {
+    const [title, status] = this.header(backdrop.title, backdrop.status)
+    title.textColor = DIM
+    status.textColor = DIM
+    const behind = new TextContainerProperty({
+      ...BODY,
+      xPosition: 0,
+      yPosition: CONTENT_Y,
+      width: WIDTH,
+      height: CARD_Y - CONTENT_Y,
+      paddingLength: BACKDROP_PADDING,
+      isEventCapture: 0,
+      textColor: DIM,
+      content: backdrop.lines.slice(-BACKDROP_LINES).join('\n') || ' ',
+    })
+    const card = new TextContainerProperty({
+      ...CARD,
+      xPosition: CARD_MARGIN,
+      yPosition: CARD_Y,
+      width: WIDTH - 2 * CARD_MARGIN,
+      height: CARD_HEIGHT,
+      borderWidth: CARD_BORDER,
+      borderColor: 15,
+      borderRadius: 8,
+      paddingLength: CARD_PADDING,
+      isEventCapture: 1,
+      content: text || ' ',
+    })
+    return this.render('text', [title, status, behind, card], [])
+  }
+
+  /** Replaces the card's text without redrawing the page. */
+  setCard(text: string): Promise<boolean> {
+    return this.upgrade(CARD, text)
   }
 
   /** Replaces the title without redrawing the page (no flicker). */
