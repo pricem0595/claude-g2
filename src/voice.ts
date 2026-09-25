@@ -14,6 +14,11 @@ const MAX_SECONDS = 60
 const MIN_BYTES = BYTES_PER_SECOND / 2
 /** How often recorded audio is sent on to the phone while recording. */
 const SEND_EVERY_MS = 250
+/**
+ * Recording goes on this long after the touchpad is let go: people release on the last syllable
+ * ("doesn't open the keyboard" came through as "doesn't open the key").
+ */
+const TAIL_MS = 400
 
 const LISTEN_TITLE = 'Voice - release to stop'
 // Header text is squeezed to single spaces, so the hints are split with a dot.
@@ -26,6 +31,8 @@ export class Voice {
   private readonly glasses: Glasses
   private state: VoiceState = 'idle'
   private upload: Upload | null = null
+  /** Released, and recording the last moment before stopping. */
+  private stopping = false
   private bytes = 0
   private text = ''
   private startedAt = 0
@@ -80,15 +87,28 @@ export class Voice {
   /** A chunk of audio from the glasses. */
   onAudio(pcm: Uint8Array): void {
     if (this.state !== 'listening') return
-    this.upload?.add(pcm)
-    this.bytes += pcm.length
+    // At the limit nothing more is kept (the phone refuses more than a minute), even while the
+    // tail after a release is recording.
+    const room = MAX_SECONDS * BYTES_PER_SECOND - this.bytes
+    if (room <= 0) return
+    const kept = pcm.length > room ? pcm.subarray(0, room) : pcm
+    this.upload?.add(kept)
+    this.bytes += kept.length
     if (this.bytes >= MAX_SECONDS * BYTES_PER_SECOND) void this.stop()
   }
 
   /** Touchpad released: stop recording and turn it into text. */
   async stop(): Promise<void> {
-    if (this.state !== 'listening') return
+    if (this.state !== 'listening' || this.stopping) return
     const session = this.session
+    this.stopping = true
+    try {
+      await new Promise((resolve) => setTimeout(resolve, TAIL_MS))
+    } finally {
+      this.stopping = false
+    }
+    // Cancelled, or cut off at the time limit, while the tail was recording.
+    if (session !== this.session || this.state !== 'listening') return
     this.state = 'transcribing'
     this.stopTicker()
     await this.glasses.mic(false).catch(() => undefined)

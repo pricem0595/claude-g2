@@ -35,4 +35,9 @@ function captureSink(): Plugin {
   }
 }
 
-export default defineConfig({ plugins: [captureSink()] })
+export default defineConfig({
+  plugins: [captureSink()],
+  // Building the bridge writes test reports under bridge-android/, which the dev server took as
+  // page changes and reloaded the glasses app, even in the middle of a recording.
+  server: { watch: { ignored: ['**/bridge-android/**', '**/captures/**'] } },
+})
