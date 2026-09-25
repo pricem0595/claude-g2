@@ -167,7 +167,7 @@ async function main(): Promise<void> {
   const bridge = await waitForEvenAppBridge()
   const glasses = new Glasses(bridge)
   const mirror = new Mirror(glasses)
-  const voice = new Voice(glasses)
+  const voice = new Voice(glasses, () => mirror.backdrop())
   voice.onOpenChange = (open) => mirror.setOverlay(open)
 
   // Inputs that arrive while one is still being handled are dropped. Taps made during a slow

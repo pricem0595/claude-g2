@@ -3,8 +3,8 @@
 // speech recognizer on the phone makes the text; the bridge types it into the Claude app.
 
 import { api } from './api/bridge'
-import { BODY_LINES, BODY_WIDTH, type Glasses } from './glasses'
-import { fitBytes, wrap } from './text'
+import { CARD_LINES, CARD_WIDTH, type Backdrop, type Glasses } from './glasses'
+import { fitBytes, truncate, wrap } from './text'
 
 /** The glasses' PCM: 16 kHz, 16-bit, mono. */
 const BYTES_PER_SECOND = 16000 * 2
@@ -20,10 +20,10 @@ const SEND_EVERY_MS = 250
  */
 const TAIL_MS = 400
 
-const LISTEN_TITLE = 'Voice - release to stop'
-// Header text is squeezed to single spaces, so the hints are split with a dot.
-const REVIEW_TITLE = 'Tap: send · Double-tap: cancel'
-const RETRY_TITLE = 'Hold: try again · Double-tap: close'
+// The card's first line says what's happening or what the touchpad does. Text is squeezed to
+// single spaces, so the hints are split with a dot.
+const REVIEW_HINT = 'Tap: send · Double-tap: cancel'
+const RETRY_HINT = 'Hold: try again · Double-tap: close'
 
 type VoiceState = 'idle' | 'listening' | 'transcribing' | 'review' | 'sending'
 
@@ -39,12 +39,18 @@ export class Voice {
   private ticker: ReturnType<typeof setInterval> | undefined
   /** Goes up each time the popup opens or closes, so late replies for an old one are dropped. */
   private session = 0
+  /** What the card is drawn over, taken when it opens. */
+  private readonly behind: () => Backdrop
+  private backdrop: Backdrop = { title: '', status: '', lines: [] }
+  /** The card is on screen, so changes only replace its text. */
+  private drawn = false
 
   /** Called when the popup opens (before it's drawn) and when it closes. */
   onOpenChange?: (open: boolean) => Promise<void>
 
-  constructor(glasses: Glasses) {
+  constructor(glasses: Glasses, behind: () => Backdrop) {
     this.glasses = glasses
+    this.behind = behind
   }
 
   get open(): boolean {
@@ -65,16 +71,19 @@ export class Voice {
     // Queued before anything else, so the mic-off of a quick release always comes after it.
     const micOn = this.glasses.mic(true)
     micOn.catch(() => undefined)
-    if (!wasOpen) await this.onOpenChange?.(true)
+    if (!wasOpen) {
+      this.backdrop = this.behind()
+      await this.onOpenChange?.(true)
+    }
     if (session !== this.session) return
 
     this.ticker = setInterval(() => {
-      if (this.state === 'listening') this.glasses.setStatus(this.elapsed()).catch(() => undefined)
+      if (this.state === 'listening') this.showListening().catch(() => undefined)
     }, 1000)
     try {
       if (!(await micOn)) throw new Error('The microphone did not start')
       // Released already: stop() has taken over the screen.
-      if (this.state === 'listening') await this.glasses.showText(LISTEN_TITLE, this.elapsed(), 'Listening...')
+      if (this.state === 'listening') await this.showListening()
     } catch (err) {
       if (session !== this.session || this.state !== 'listening') return
       this.stopTicker()
@@ -120,20 +129,14 @@ export class Voice {
 
     try {
       if (!upload) throw new Error('Nothing was recorded')
-      await this.glasses.setStatus('')
-      await this.glasses.setBody('Turning speech into text...')
+      await this.show('Turning speech into text...', '')
       // The phone has been transcribing all along; this only waits for the last moment.
       const text = await upload.finish()
       if (session !== this.session) return
       this.text = text.trim()
       this.state = 'review'
-      if (!this.text) {
-        await this.glasses.setTitle(RETRY_TITLE)
-        await this.glasses.setBody("Didn't catch that.")
-        return
-      }
-      await this.glasses.setTitle(REVIEW_TITLE)
-      await this.glasses.setBody(fitBody(this.text))
+      if (!this.text) return await this.show(RETRY_HINT, "Didn't catch that.")
+      await this.show(REVIEW_HINT, this.text)
     } catch (err) {
       if (session !== this.session) return
       await this.fail(err)
@@ -147,7 +150,7 @@ export class Voice {
     const session = this.session
     this.state = 'sending'
     try {
-      await this.glasses.setStatus('Sending...')
+      await this.show('Sending...', this.text)
       await api.send(this.text)
       if (session === this.session) await this.close()
     } catch (err) {
@@ -155,7 +158,7 @@ export class Voice {
       // Keep the text up, so it can be tried again or cancelled.
       this.state = 'review'
       const message = err instanceof Error ? err.message : String(err)
-      await this.glasses.setStatus(`× ${message}`).catch(() => undefined)
+      await this.show(`× ${message}`, this.text).catch(() => undefined)
     }
   }
 
@@ -173,6 +176,7 @@ export class Voice {
     this.state = 'idle'
     this.dropUpload()
     this.text = ''
+    this.drawn = false
     await this.onOpenChange?.(false)
   }
 
@@ -181,7 +185,25 @@ export class Voice {
     this.state = 'review'
     this.text = ''
     const message = err instanceof Error ? err.message : String(err)
-    await this.glasses.showText(RETRY_TITLE, '', `× ${message}`).catch(() => undefined)
+    await this.show(RETRY_HINT, `× ${message}`).catch(() => undefined)
+  }
+
+  private showListening(): Promise<void> {
+    return this.show(`${this.elapsed()} · release to stop`, 'Listening...')
+  }
+
+  /**
+   * Draws the card: [header] on its first line, [body] below. The first time, over the page
+   * that was on screen; after that only its text changes.
+   */
+  private async show(header: string, body: string): Promise<void> {
+    const text = cardText(header, body)
+    if (this.drawn) {
+      await this.glasses.setCard(text)
+      return
+    }
+    await this.glasses.showCard(this.backdrop, text)
+    this.drawn = true
   }
 
   private dropUpload(): void {
@@ -271,9 +293,13 @@ function concat(chunks: Uint8Array[]): Uint8Array {
   return out
 }
 
-/** The text as it fits on screen. Past the last line, the end of the message is what shows. */
-function fitBody(text: string): string {
-  const lines = wrap(text, BODY_WIDTH)
-  const shown = lines.length > BODY_LINES ? ['...', ...lines.slice(lines.length - BODY_LINES + 1)] : lines
-  return fitBytes(shown)
+/**
+ * The card's text: one header line, then the body as fits. Past the last line, the end of a
+ * long message is what shows.
+ */
+function cardText(header: string, body: string): string {
+  const room = CARD_LINES - 1
+  const lines = body ? wrap(body, CARD_WIDTH) : []
+  const shown = lines.length > room ? ['...', ...lines.slice(lines.length - room + 1)] : lines
+  return fitBytes([truncate(header, CARD_WIDTH), ...shown])
 }
