@@ -65,8 +65,8 @@ own gestures (the navigation bar, the notification shade) can't be blocked.
 4. On the glasses app's phone page, enter the pairing token the bridge shows.
 5. Open a Claude Code session in the Claude app and leave it on screen. The bridge keeps the
    screen on while it runs; you can turn that off.
-6. Dictation needs no setup. Only if it reports a missing microphone permission, tap *Allow
-   microphone* on the bridge's step 5 (the sound still comes from the glasses).
+6. For dictation, the **Even app** needs the microphone permission (the recording comes through
+   it); the bridge doesn't. The bridge's step 5 has a button to the Even app's permissions.
 
 **Upgrading from a bridge you built yourself:** release builds are signed with the project's key,
 so Android won't install one over a self-built copy. Uninstall the old bridge first, then repeat

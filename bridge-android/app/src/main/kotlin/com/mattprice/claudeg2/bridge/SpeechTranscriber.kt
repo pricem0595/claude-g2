@@ -240,7 +240,7 @@ class SpeechTranscriber(private val context: Context) : Transcriber {
         bundle?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim().orEmpty()
 
     private fun describeError(code: Int) = when (code) {
-        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Speech needs the microphone permission: open Claude G2 Bridge"
+        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "The phone's speech recognizer refused (permissions)"
         SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED -> "Speech: this language isn't supported"
         SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE -> "Speech: the language isn't downloaded yet"
         SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Speech recognizer is busy"
