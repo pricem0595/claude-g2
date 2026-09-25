@@ -1,5 +1,23 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
+}
+
+// Release signing. The key stays off the repo: ~/.gradle/gradle.properties names a properties
+// file (storeFile, storePassword, keyAlias, keyPassword) with
+//   claudeG2.signing=C:/path/to/claude-g2-release.properties
+// Without it, release builds come out unsigned; debug builds are unaffected.
+val releaseKey: Properties? = (findProperty("claudeG2.signing") as String?)?.let { path ->
+    val props = Properties()
+    val stream = FileInputStream(file(path))
+    try {
+        props.load(stream)
+    } finally {
+        stream.close()
+    }
+    props
 }
 
 android {
@@ -13,6 +31,16 @@ android {
         versionCode = 5
         // Shown as "v0.1" on the bridge screen. Bump both with each release.
         versionName = "0.5"
+    }
+
+    if (releaseKey != null) {
+        signingConfigs.create("release") {
+            storeFile = file(releaseKey.getProperty("storeFile"))
+            storePassword = releaseKey.getProperty("storePassword")
+            keyAlias = releaseKey.getProperty("keyAlias")
+            keyPassword = releaseKey.getProperty("keyPassword")
+        }
+        buildTypes.getByName("release").signingConfig = signingConfigs.getByName("release")
     }
 
     compileOptions {
