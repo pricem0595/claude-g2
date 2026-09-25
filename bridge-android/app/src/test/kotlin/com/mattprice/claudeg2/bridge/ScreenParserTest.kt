@@ -34,6 +34,21 @@ class ScreenParserTest {
     }
 
     @Test
+    fun `the Send button beside the message box is found`() {
+        val root = fixture("synthetic-transcript")
+        val composer = ScreenParser.composer(root)!!
+        assertEquals("Send", ScreenParser.sendButton(root, composer)?.label)
+    }
+
+    @Test
+    fun `an empty message box has no Send, and Stop or the placeholder never count as one`() {
+        // Real capture while Claude works: "Queue a message…" placeholder, speech input and Stop.
+        val root = fixture("real-transcript-running")
+        val composer = ScreenParser.composer(root)!!
+        assertNull(ScreenParser.sendButton(root, composer))
+    }
+
+    @Test
     fun `a question with only icon buttons next to it is not a prompt`() {
         // The last transcript message ends in "?" and has Copy/Retry beside it.
         assertEquals(ScreenKind.TRANSCRIPT, ScreenParser.parse(fixture("synthetic-transcript")).kind)

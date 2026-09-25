@@ -2,6 +2,7 @@ import { OsEventTypeList, waitForEvenAppBridge, type EvenAppBridge, type EvenHub
 import { api, BRIDGE_URL, setToken, type MirrorState } from './api/bridge'
 import { Glasses, type PageKind } from './glasses'
 import { Mirror } from './mirror'
+import { Voice } from './voice'
 
 const TOKEN_KEY = 'token'
 
@@ -11,13 +12,16 @@ type Input =
   | { kind: 'tap' }
   | { kind: 'back' }
   | { kind: 'foreground' }
+  | { kind: 'background' }
+  | { kind: 'hold' }
+  | { kind: 'release' }
   | { kind: 'exit' }
 
 /**
  * Turns a raw hub event into an input. Protobuf omits zero values, so a missing eventType is
  * CLICK_EVENT (0) and a missing list index is item 0. List pages report taps as listEvent (and
  * scroll natively, moving the highlight); text pages report scroll as textEvent and taps as
- * sysEvent.
+ * sysEvent. A long press and its release are separate events (SDK 0.0.15+).
  */
 function toInput(event: EvenHubEvent, page: PageKind): Input | null {
   const { listEvent, textEvent, sysEvent } = event
@@ -40,8 +44,14 @@ function toInput(event: EvenHubEvent, page: PageKind): Input | null {
       return page === 'text' ? { kind: 'tap' } : null
     case OsEventTypeList.DOUBLE_CLICK_EVENT:
       return { kind: 'back' }
+    case OsEventTypeList.LONG_PRESS_EVENT:
+      return { kind: 'hold' }
+    case OsEventTypeList.LONG_PRESS_RELEASE_EVENT:
+      return { kind: 'release' }
     case OsEventTypeList.FOREGROUND_ENTER_EVENT:
       return { kind: 'foreground' }
+    case OsEventTypeList.FOREGROUND_EXIT_EVENT:
+      return { kind: 'background' }
     case OsEventTypeList.SYSTEM_EXIT_EVENT:
     case OsEventTypeList.ABNORMAL_EXIT_EVENT:
       return { kind: 'exit' }
@@ -65,6 +75,35 @@ async function handle(mirror: Mirror, glasses: Glasses, input: Input): Promise<v
       return mirror.redraw()
     case 'exit':
       return mirror.stop()
+    case 'background':
+    case 'hold':
+    case 'release':
+      return
+  }
+}
+
+/**
+ * Input while the voice popup is up, or a hold/release that opens or closes it. Never dropped
+ * as busy: a lost release would leave the mic on.
+ */
+async function handleVoice(voice: Voice, mirror: Mirror, input: Input): Promise<void> {
+  switch (input.kind) {
+    case 'hold':
+      return voice.start()
+    case 'release':
+      return voice.stop()
+    case 'tap':
+      return voice.confirm()
+    case 'back':
+    case 'background':
+      return voice.cancel()
+    case 'exit':
+      await voice.cancel()
+      return mirror.stop()
+    case 'select':
+    case 'scroll':
+    case 'foreground':
+      return
   }
 }
 
@@ -128,14 +167,31 @@ async function main(): Promise<void> {
   const bridge = await waitForEvenAppBridge()
   const glasses = new Glasses(bridge)
   const mirror = new Mirror(glasses)
+  const voice = new Voice(glasses)
+  voice.onOpenChange = (open) => mirror.setOverlay(open)
 
   // Inputs that arrive while one is still being handled are dropped. Taps made during a slow
   // action would otherwise replay against whatever the Claude app shows next.
   let busy = false
   bridge.onEvenHubEvent(async (event) => {
+    // Many small chunks a second while recording: straight to the recorder, not logged.
+    if (event.audioEvent) {
+      voice.onAudio(event.audioEvent.audioPcm)
+      return
+    }
     const input = toInput(event, glasses.kind)
     if (import.meta.env.DEV) console.log('[claude-g2] event', JSON.stringify(event), '→', input?.kind ?? 'ignored')
-    if (!input || (busy && input.kind !== 'exit')) return
+    if (!input) return
+
+    // A hold opens the popup only in a session, and not while a mirror action could still
+    // draw over it. Once open, the popup takes every input.
+    const startsVoice = input.kind === 'hold' && !busy && mirror.canDictate()
+    if (voice.open || startsVoice) {
+      handleVoice(voice, mirror, input).catch((err) => console.error('[claude-g2] voice', err instanceof Error ? err.message : err))
+      return
+    }
+    if (input.kind === 'hold' || input.kind === 'release' || input.kind === 'background') return
+    if (busy && input.kind !== 'exit') return
 
     busy = true
     try {
@@ -148,6 +204,19 @@ async function main(): Promise<void> {
   })
 
   if (import.meta.env.DEV) mirror.onState = captureToDevServer()
+  // The simulator can't long-press. Dev builds loaded with ?voice-demo do one hold, 1.5 s of
+  // recording and a release as soon as a session is open; then tap or double-tap in the
+  // simulator. The desktop bridge hears any recording as the same sentence.
+  if (import.meta.env.DEV && location.search.includes('voice-demo')) {
+    const timer = setInterval(async () => {
+      if (!mirror.canDictate()) return
+      clearInterval(timer)
+      await handleVoice(voice, mirror, { kind: 'hold' })
+      voice.onAudio(new Uint8Array(64000).map((_, i) => i % 7))
+      await new Promise((resolve) => setTimeout(resolve, 1500))
+      await handleVoice(voice, mirror, { kind: 'release' })
+    }, 500)
+  }
 
   await setUpPhonePage(bridge, mirror)
   await mirror.run()

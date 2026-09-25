@@ -17,12 +17,29 @@ class FakeClaude : ScreenSource {
         private set
     val clicks = mutableListOf<String>()
 
+    /** What's typed in the message box, and every message sent from it. */
+    var typed = ""
+        private set
+    val sent = mutableListOf<String>()
+
     fun show(name: String) {
         screen = name
         controller.onSnapshot(fixture(name))
     }
 
+    override suspend fun setText(node: UiNode, text: String): Boolean {
+        if (!node.editable) return false
+        typed = text
+        return true
+    }
+
     override suspend fun click(node: UiNode): Boolean {
+        if (node.label?.let { ClaudeUi.SEND_WORDS.containsMatchIn(it) } == true) {
+            clicks += "Send"
+            sent += typed
+            typed = ""
+            return true
+        }
         val label = ScreenParser.choiceLabel(node) ?: return false
         clicks += label
         show(

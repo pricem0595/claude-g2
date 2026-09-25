@@ -45,6 +45,8 @@ class FakeLongTranscript(
 
     override suspend fun back() = false
 
+    override suspend fun setText(node: UiNode, text: String) = false
+
     override suspend fun scroll(up: Boolean): Boolean {
         val target = if (up) (first - page).coerceAtLeast(0) else (first + page).coerceAtMost(messages.size - window)
         if (target == first) return false

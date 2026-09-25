@@ -10,7 +10,7 @@ import org.junit.Test
  *
  *   gradlew testDebugUnitTest --tests "*DesktopBridge*" --rerun -Dbridge.serve=true
  *
- * Token: ABCDE. Skipped in normal test runs.
+ * Token: ABCDE. Any voice recording transcribes as [FAKE_SPEECH]. Skipped in normal test runs.
  */
 class DesktopBridge {
     @Test
@@ -22,7 +22,7 @@ class DesktopBridge {
             val controller = MirrorController(fake)
             fake.controller = controller
             fake.start()
-            BridgeHttpServer(controller, { TEST_TOKEN }, port = BRIDGE_PORT).start()
+            BridgeHttpServer(controller, { TEST_TOKEN }, port = BRIDGE_PORT, transcriber = fakeTranscriber).start()
             println("Desktop bridge (long transcript) on http://127.0.0.1:$BRIDGE_PORT, token $TEST_TOKEN.")
             Thread.sleep(Long.MAX_VALUE)
         }

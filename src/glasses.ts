@@ -11,6 +11,7 @@
 // can't take concurrent calls over its BLE link.
 
 import {
+  AudioInputSource,
   CreateStartUpPageContainer,
   ListContainerProperty,
   ListItemContainerProperty,
@@ -165,6 +166,16 @@ export class Glasses {
   /** Replaces the body text of a text page without redrawing it. */
   setBody(text: string): Promise<boolean> {
     return this.upgrade(BODY, text)
+  }
+
+  /**
+   * Turns the glasses' microphone on or off. Queued with the drawing calls, so a quick
+   * press-and-release always turns it off after it was turned on.
+   */
+  mic(on: boolean): Promise<boolean> {
+    return this.run('audioControl', () =>
+      on ? this.bridge.audioControl(true, AudioInputSource.Glasses) : this.bridge.audioControl(false),
+    )
   }
 
   /** Asks the host to close the app; exit mode 1 shows its confirmation dialog. */

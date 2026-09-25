@@ -8,6 +8,7 @@ import android.content.pm.ActivityInfo
 import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.Rect
+import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
@@ -66,6 +67,10 @@ class ClaudeMirrorService : AccessibilityService(), ScreenSource {
 
     val controller = MirrorController(this)
 
+    /** Speech-to-text for the glasses' recordings; null until the service connects. */
+    var transcriber: SpeechTranscriber? = null
+        private set
+
     private val capture = Runnable { captureNow() }
     private val poll = object : Runnable {
         override fun run() {
@@ -83,9 +88,11 @@ class ClaudeMirrorService : AccessibilityService(), ScreenSource {
         worker = HandlerThread("mirror").also { it.start() }
         handler = Handler(worker.looper)
 
+        val speech = SpeechTranscriber(this)
+        transcriber = speech
         val http = BridgeHttpServer(controller, { settings.token }, status = {
-            JSONObject().put("service", true).put("package", settings.claudePackage)
-        })
+            JSONObject().put("service", true).put("package", settings.claudePackage).put("speech", speech.available)
+        }, transcriber = speech)
         try {
             http.start(IDLE_CONNECTION_MS, false)
             server = http
@@ -245,6 +252,17 @@ class ClaudeMirrorService : AccessibilityService(), ScreenSource {
     }
 
     override suspend fun back(): Boolean = performGlobalAction(GLOBAL_ACTION_BACK)
+
+    override suspend fun setText(node: UiNode, text: String): Boolean {
+        val info = liveNodes[node.id]?.takeIf { it.refresh() } ?: return false
+        info.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+        val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text) }
+        if (!info.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) return false
+        // The Send button appears once the box has text; look for it without waiting for events.
+        delay(DEBOUNCE_MS)
+        handler.post(capture)
+        return true
+    }
 
     private suspend fun tap(x: Float, y: Float): Boolean {
         val gesture = GestureDescription.Builder()
