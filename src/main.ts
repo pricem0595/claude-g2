@@ -113,7 +113,9 @@ async function setUpPhonePage(bridge: EvenAppBridge, mirror: Mirror): Promise<vo
   const state = document.getElementById('bridge-state')
   const input = document.getElementById('token') as HTMLInputElement | null
   const save = document.getElementById('save-token')
+  const version = document.getElementById('app-version')
   if (url) url.textContent = BRIDGE_URL
+  if (version) version.textContent = `v${__APP_VERSION__}`
 
   const refresh = () =>
     api

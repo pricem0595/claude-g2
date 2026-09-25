@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { defineConfig, type Plugin } from 'vite'
 
@@ -35,8 +35,12 @@ function captureSink(): Plugin {
   }
 }
 
+// The version in app.json, which is the one the Even Hub knows the build by, shown in the app.
+const appVersion: string = JSON.parse(readFileSync(join(import.meta.dirname, 'app.json'), 'utf8')).version
+
 export default defineConfig({
   plugins: [captureSink()],
+  define: { __APP_VERSION__: JSON.stringify(appVersion) },
   // Building the bridge writes test reports under bridge-android/, which the dev server took as
   // page changes and reloaded the glasses app, even in the middle of a recording.
   server: { watch: { ignored: ['**/bridge-android/**', '**/captures/**'] } },

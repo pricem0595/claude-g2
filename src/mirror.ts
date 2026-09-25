@@ -308,7 +308,7 @@ export class Mirror {
   private showStatus(message: string): Promise<void> {
     if (this.page?.kind === 'status' && this.page.message === message) return Promise.resolve()
     this.page = { kind: 'status', message }
-    return this.glasses.showText('Claude G2', '', message)
+    return this.glasses.showText(`Claude G2 v${__APP_VERSION__}`, '', message)
   }
 }
 
