@@ -29,6 +29,12 @@ Dictation records with the glasses' microphones. The phone's own speech recogniz
 recording into text: Android's on-device one when the phone has it, so the audio stays on the
 phone. Nothing is sent until you tap.
 
+The bridge keeps the phone awake while the Claude app is on screen, so in a pocket it can take
+stray touches. While the Claude app is in front, a small lock button sits in the top right
+corner: **hold it** to lock the screen against touches, hold it again to unlock. The glasses
+keep working while it's locked, and the keyboard stays hidden. The system's own gestures (the
+navigation bar, the notification shade) can't be blocked.
+
 ## Setup (Android only)
 
 1. Build and install the bridge. You need a JDK 17+ as `JAVA_HOME`:
@@ -51,6 +57,7 @@ phone. Nothing is sent until you tap.
 | what | command |
 | --- | --- |
 | Bridge unit tests | `cd bridge-android && gradlew testDebugUnitTest` |
+| Signed release APK | `gradlew assembleRelease`. The key stays out of the repo: put `claudeG2.signing=<path to a .properties file>` in `~/.gradle/gradle.properties`, with `storeFile`, `storePassword`, `keyAlias` and `keyPassword` in that file. Without it the release APK is unsigned. |
 | Bridge on this PC (replays the fixture screens; token `ABCDE`) | `npm run bridge` |
 | Glasses app against it | `set VITE_BRIDGE_TOKEN=ABCDE && npm run dev`, then `npm run simulate` |
 | Dictation in the simulator | It can't long-press, so start it with `npx evenhub-simulator --automation-port 9898 "http://localhost:5173/?voice-demo"`. Once a session is open, the dev build holds, records 1.5 s and releases by itself; then tap to send or double-tap to cancel. The desktop bridge hears any recording as "List the files in src". |

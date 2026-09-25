@@ -35,6 +35,9 @@ interface ScreenSource {
 
     /** Replaces the text in an editable node (the message box). Returns false if it couldn't. */
     suspend fun setText(node: UiNode, text: String): Boolean
+
+    /** Takes focus off the message box once a message is sent, so the keyboard closes. */
+    suspend fun clearFocus(node: UiNode) = Unit
 }
 
 /** What the glasses get from GET /state. `version` goes up whenever anything in it changes. */
@@ -206,6 +209,8 @@ class MirrorController(private val source: ScreenSource) {
             val button = lastSnapshot?.let { root -> ScreenParser.composer(root)?.let { ScreenParser.sendButton(root, it) } }
             if (button != null) {
                 if (!source.click(button)) throw BridgeException(502, "The Send tap didn't go through")
+                // Typing focused the box, which opened the keyboard; nobody is at the phone to close it.
+                source.clearFocus(composer)
                 return
             }
             if (System.currentTimeMillis() >= until) throw BridgeException(502, "No Send button: the message is in the box on the phone")
