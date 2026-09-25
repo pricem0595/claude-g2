@@ -10,9 +10,9 @@ android {
         applicationId = "com.mattprice.claudeg2.bridge"
         minSdk = 33
         targetSdk = 36
-        versionCode = 4
+        versionCode = 5
         // Shown as "v0.1" on the bridge screen. Bump both with each release.
-        versionName = "0.4"
+        versionName = "0.5"
     }
 
     compileOptions {

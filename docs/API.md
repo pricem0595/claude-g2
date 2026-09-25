@@ -21,7 +21,11 @@ ignored when comparing. Without it the bridge answers `401`.
 | | `{"type":"scroll","dir":"up"}` scrolls the Claude app's list a page: `up` loads older messages, `down` newer (409 "Already at the end" when there are none). `"dir":"latest"` pages forward until the list stops and answers `{pages}`. |
 | | `{"type":"back"}` presses Back while the Claude app is in front. |
 | | `{"type":"send","text":"…"}` types the text into the open session's message box and taps Send. 409 off a session; 502 if no Send button shows up within 3 s (the text is then left in the box). |
-| `POST /voice/transcribe` | Body: raw PCM, 16 kHz signed 16-bit little-endian mono (`Content-Type: application/octet-stream`), at most 60 s. Runs the phone's speech recognizer (on-device when it has one) and answers `{text}`, `""` when it heard no words. 413 over 60 s, 503 with no recognizer. |
+| `POST /voice/start` | Starts turning a recording into text with the phone's speech recognizer (on-device when it has one) and answers `{id}`. One at a time: a new one cancels the last. 503 with no recognizer. |
+| `POST /voice/audio?id=…` | Body: the next piece of the recording, raw PCM, 16 kHz signed 16-bit little-endian mono (`Content-Type: application/octet-stream`). Send it as it's recorded: the recognizer drops audio that comes much faster than real time, so the bridge feeds it at most twice real time. 413 past 60 s in all (the recording is then cancelled), 410 for a recording that's over. |
+| `POST /voice/finish?id=…` | The recording has ended: answers `{text}`, `""` when it heard no words. The recognizer has kept up, so this is quick. |
+| `POST /voice/cancel?id=…` | Throws the recording away. |
+| `POST /voice/transcribe` | For testing over adb: a whole recording in one body (at most 60 s), answered with `{text}` after half its length. |
 | `GET /dump` | The last Claude screen as `adb shell uiautomator dump`-format XML, for test fixtures. |
 
 ## State
@@ -49,7 +53,7 @@ Errors come back as `{"ok": false, "error": "…"}`:
 | `401` | Wrong or missing token. |
 | `404` | Unknown route. |
 | `409` | The Claude app isn't in front, there's nothing to scroll, or nothing has been captured yet. |
-| `410` | The option tapped is no longer on screen. |
+| `410` | The option tapped is no longer on screen, or the recording is over. |
 | `413` | The recording is over 60 s. |
 | `502` | The tap, Back, typing or Send didn't go through, or speech recognition failed. |
 | `503` | This phone has no speech recognizer. |

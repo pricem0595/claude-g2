@@ -12,6 +12,8 @@ const BYTES_PER_SECOND = 16000 * 2
 const MAX_SECONDS = 60
 /** Shorter than this is a stray press, not speech: close without asking. */
 const MIN_BYTES = BYTES_PER_SECOND / 2
+/** How often recorded audio is sent on to the phone while recording. */
+const SEND_EVERY_MS = 250
 
 const LISTEN_TITLE = 'Voice - release to stop'
 // Header text is squeezed to single spaces, so the hints are split with a dot.
@@ -23,7 +25,7 @@ type VoiceState = 'idle' | 'listening' | 'transcribing' | 'review' | 'sending'
 export class Voice {
   private readonly glasses: Glasses
   private state: VoiceState = 'idle'
-  private chunks: Uint8Array[] = []
+  private upload: Upload | null = null
   private bytes = 0
   private text = ''
   private startedAt = 0
@@ -48,7 +50,8 @@ export class Voice {
     const wasOpen = this.open
     const session = ++this.session
     this.state = 'listening'
-    this.chunks = []
+    this.upload?.cancel()
+    this.upload = new Upload()
     this.bytes = 0
     this.text = ''
     this.startedAt = Date.now()
@@ -68,6 +71,7 @@ export class Voice {
     } catch (err) {
       if (session !== this.session || this.state !== 'listening') return
       this.stopTicker()
+      this.dropUpload()
       await this.glasses.mic(false).catch(() => undefined)
       await this.fail(err)
     }
@@ -76,8 +80,7 @@ export class Voice {
   /** A chunk of audio from the glasses. */
   onAudio(pcm: Uint8Array): void {
     if (this.state !== 'listening') return
-    // The host may reuse the buffer.
-    this.chunks.push(pcm.slice())
+    this.upload?.add(pcm)
     this.bytes += pcm.length
     if (this.bytes >= MAX_SECONDS * BYTES_PER_SECOND) void this.stop()
   }
@@ -92,13 +95,15 @@ export class Voice {
     if (session !== this.session) return
 
     if (this.bytes < MIN_BYTES) return this.close()
-    const pcm = this.recording()
-    this.chunks = []
+    const upload = this.upload
+    this.upload = null
 
     try {
+      if (!upload) throw new Error('Nothing was recorded')
       await this.glasses.setStatus('')
       await this.glasses.setBody('Turning speech into text...')
-      const text = await api.transcribe(pcm)
+      // The phone has been transcribing all along; this only waits for the last moment.
+      const text = await upload.finish()
       if (session !== this.session) return
       this.text = text.trim()
       this.state = 'review'
@@ -146,7 +151,7 @@ export class Voice {
   private async close(): Promise<void> {
     this.session++
     this.state = 'idle'
-    this.chunks = []
+    this.dropUpload()
     this.text = ''
     await this.onOpenChange?.(false)
   }
@@ -159,14 +164,9 @@ export class Voice {
     await this.glasses.showText(RETRY_TITLE, '', `× ${message}`).catch(() => undefined)
   }
 
-  private recording(): Uint8Array {
-    const pcm = new Uint8Array(this.bytes)
-    let at = 0
-    for (const chunk of this.chunks) {
-      pcm.set(chunk, at)
-      at += chunk.length
-    }
-    return pcm
+  private dropUpload(): void {
+    this.upload?.cancel()
+    this.upload = null
   }
 
   private elapsed(): string {
@@ -178,6 +178,77 @@ export class Voice {
     clearInterval(this.ticker)
     this.ticker = undefined
   }
+}
+
+/**
+ * One recording, sent to the phone as it's recorded, a few times a second, so its recognizer
+ * works in step with the speech. It drops audio that comes much faster than real time, which
+ * sending a long recording in one go did: only its last words came back.
+ */
+class Upload {
+  private readonly id: Promise<string>
+  /** The sends so far, in order; each waits for the one before. */
+  private sent: Promise<void>
+  private pending: Uint8Array[] = []
+  /** The first thing that went wrong; nothing more is sent after it. */
+  private error: unknown = null
+  private readonly timer: ReturnType<typeof setInterval>
+
+  constructor() {
+    this.id = api.voiceStart()
+    this.sent = this.id.then(
+      () => undefined,
+      (err) => {
+        this.error ??= err
+      },
+    )
+    this.timer = setInterval(() => this.flush(), SEND_EVERY_MS)
+  }
+
+  add(pcm: Uint8Array): void {
+    // The host may reuse the buffer.
+    this.pending.push(pcm.slice())
+  }
+
+  /** Sends what's left, then waits for the text. */
+  async finish(): Promise<string> {
+    clearInterval(this.timer)
+    this.flush()
+    await this.sent
+    if (this.error) throw this.error
+    return api.voiceFinish(await this.id)
+  }
+
+  cancel(): void {
+    clearInterval(this.timer)
+    this.pending = []
+    this.error ??= new Error('Cancelled')
+    this.id.then((id) => api.voiceCancel(id)).catch(() => undefined)
+  }
+
+  private flush(): void {
+    if (this.pending.length === 0 || this.error) return
+    const pcm = concat(this.pending)
+    this.pending = []
+    this.sent = this.sent.then(async () => {
+      if (this.error) return
+      try {
+        await api.voiceAudio(await this.id, pcm)
+      } catch (err) {
+        this.error ??= err
+      }
+    })
+  }
+}
+
+function concat(chunks: Uint8Array[]): Uint8Array {
+  const out = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0))
+  let at = 0
+  for (const chunk of chunks) {
+    out.set(chunk, at)
+    at += chunk.length
+  }
+  return out
 }
 
 /** The text as it fits on screen. Past the last line, the end of the message is what shows. */
