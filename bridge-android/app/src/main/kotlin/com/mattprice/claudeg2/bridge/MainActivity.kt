@@ -1,7 +1,9 @@
 package com.mattprice.claudeg2.bridge
 
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
@@ -50,6 +52,8 @@ class MainActivity : Activity() {
     private lateinit var tokenView: TextView
     private lateinit var glassesStatus: TextView
     private lateinit var claudeStatus: TextView
+    private lateinit var voiceStatus: TextView
+    private lateinit var micButton: View
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -139,6 +143,19 @@ class MainActivity : Activity() {
             lockPortrait,
         )
 
+        // 5. Voice messages.
+        voiceStatus = text("", 15f, bold = true)
+        micButton = button("Allow microphone", secondary = true) { requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 1) }
+        val step5 = step(
+            5, "Voice messages",
+            "Hold the glasses' touchpad in a session to dictate a message. The glasses record it " +
+                "and this phone's own speech recognizer turns it into text, on the phone when it " +
+                "can. Nothing to set up. Only if dictation says the microphone permission is " +
+                "missing, allow it below; the sound still comes from the glasses.",
+            voiceStatus,
+            micButton,
+        )
+
         val footer = text(
             "Privacy: the mirror only reads the Claude app. It serves it at 127.0.0.1:$BRIDGE_PORT " +
                 "on this phone, only to apps that send the pairing token.",
@@ -148,7 +165,7 @@ class MainActivity : Activity() {
 
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            for (view in listOf(header, step1, step2, step3, step4, footer)) {
+            for (view in listOf(header, step1, step2, step3, step4, step5, footer)) {
                 addView(view, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = pad })
             }
         }
@@ -199,6 +216,16 @@ class MainActivity : Activity() {
             service == null -> status(claudeStatus, TODO, "• Turn on the mirror first")
             seen != null && seen != ScreenKind.UNKNOWN -> status(claudeStatus, DONE, "✓ The Claude app is mirrored")
             else -> status(claudeStatus, TODO, "• Waiting for the Claude app")
+        }
+
+        val micAllowed = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        micButton.visibility = if (micAllowed) View.GONE else View.VISIBLE
+        val speech = service?.transcriber
+        when {
+            speech == null -> status(voiceStatus, TODO, "• Turn on the mirror first")
+            speech.onDeviceAvailable -> status(voiceStatus, DONE, "✓ Speech is recognized on this phone")
+            speech.available -> status(voiceStatus, DONE, "✓ Speech recognizer ready (may use the network)")
+            else -> status(voiceStatus, PROBLEM, "No speech recognizer on this phone")
         }
     }
 

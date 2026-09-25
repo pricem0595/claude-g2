@@ -17,12 +17,17 @@ app stays signed in, and this only reads its screen.
 
 ## On the glasses
 
-| where | scroll | tap | double-tap |
-| --- | --- | --- | --- |
-| Session list | move the highlight | open that session | close the app |
-| Transcript | one line back / forward (past what's loaded, scrolls the phone to load older or newer messages) | jump to the newest message, scrolling the phone there too | back to the session list |
-| Prompt (permission or question) | move through the options | **pick the highlighted option** | nothing, so a stray double-tap can't dismiss a prompt |
-| Error screen | | retry | close the app |
+| where | scroll | tap | double-tap | hold |
+| --- | --- | --- | --- | --- |
+| Session list | move the highlight | open that session | close the app | |
+| Transcript | one line back / forward (past what's loaded, scrolls the phone to load older or newer messages) | jump to the newest message, scrolling the phone there too | back to the session list | **dictate a message**: speak while holding, release to see the text |
+| Voice popup | | **send the text to the session** | cancel, nothing is sent | record again |
+| Prompt (permission or question) | move through the options | **pick the highlighted option** | nothing, so a stray double-tap can't dismiss a prompt | |
+| Error screen | | retry | close the app | |
+
+Dictation records with the glasses' microphones. The phone's own speech recognizer turns the
+recording into text: Android's on-device one when the phone has it, so the audio stays on the
+phone. Nothing is sent until you tap.
 
 ## Setup (Android only)
 
@@ -38,6 +43,8 @@ app stays signed in, and this only reads its screen.
 4. On the glasses app's phone page, enter the pairing token the bridge shows.
 5. Open a Claude Code session in the Claude app and leave it on screen. The bridge keeps the
    screen on while it runs; you can turn that off.
+6. Dictation needs no setup. Only if it reports a missing microphone permission, tap *Allow
+   microphone* on the bridge's step 5 (the sound still comes from the glasses).
 
 ## Development
 
@@ -46,6 +53,7 @@ app stays signed in, and this only reads its screen.
 | Bridge unit tests | `cd bridge-android && gradlew testDebugUnitTest` |
 | Bridge on this PC (replays the fixture screens; token `ABCDE`) | `npm run bridge` |
 | Glasses app against it | `set VITE_BRIDGE_TOKEN=ABCDE && npm run dev`, then `npm run simulate` |
+| Dictation in the simulator | It can't long-press, so start it with `npx evenhub-simulator --automation-port 9898 "http://localhost:5173/?voice-demo"`. Once a session is open, the dev build holds, records 1.5 s and releases by itself; then tap to send or double-tap to cancel. The desktop bridge hears any recording as "List the files in src". |
 | Drive the simulator | `npm run simulate` starts it with an automation port: `POST http://127.0.0.1:9898/api/input` with `{"action":"down"}` (or `up`, `click`, `double_click`), `GET /api/screenshot/glasses` |
 | Bridge on this PC, one long pretend session (for scrolling) | `gradlew testDebugUnitTest --tests "*DesktopBridge*" --rerun -Dbridge.serve=true -Dbridge.scenario=long`; add `-Dbridge.page=6 -Dbridge.steps=1` for whole-screen jumps with no in-between frames, the worst case. Dev builds log each transcript redraw to the console as `[claude-g2] frame …`. |
 

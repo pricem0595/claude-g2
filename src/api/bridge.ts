@@ -57,7 +57,8 @@ async function request(
   signal?: AbortSignal,
 ): Promise<Response> {
   const headers: Record<string, string> = { Authorization: `Bearer ${token}` }
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  const raw = body instanceof Uint8Array
+  if (body !== undefined) headers['Content-Type'] = raw ? 'application/octet-stream' : 'application/json'
   const timeout = AbortSignal.timeout(timeoutMs)
   const started = Date.now()
   let res: Response
@@ -65,7 +66,7 @@ async function request(
     res = await fetch(BRIDGE_URL + path, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : raw ? (body as Uint8Array<ArrayBuffer>) : JSON.stringify(body),
       signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
     })
   } catch (err) {
@@ -114,4 +115,9 @@ export const api = {
   /** Scrolls the Claude app's list: up loads older messages, down newer, latest jumps to the end. */
   scroll: (dir: 'up' | 'down' | 'latest') => call('POST', '/action', { type: 'scroll', dir }, dir === 'latest' ? 20000 : 8000),
   back: () => call('POST', '/action', { type: 'back' }),
+
+  /** Speech to text on the phone. `pcm` is 16 kHz 16-bit mono; "" when no words were heard. */
+  transcribe: async (pcm: Uint8Array) => (await call<{ text: string }>('POST', '/voice/transcribe', pcm, 25000)).text,
+  /** Types `text` into the open session's message box and taps Send. */
+  send: (text: string) => call('POST', '/action', { type: 'send', text }, 10000),
 }

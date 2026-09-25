@@ -35,6 +35,8 @@ export class Mirror {
 
   /** Set while jumping to the latest message: state updates are applied but not drawn. */
   private holdDraw = false
+  /** Set while the voice popup covers the screen: state updates are kept but nothing is drawn. */
+  private overlay = false
   /** Called once the next state from the bridge has been drawn. */
   private stateWaiters: (() => void)[] = []
 
@@ -81,6 +83,20 @@ export class Mirror {
   redraw(): Promise<void> {
     this.page = null
     return this.draw()
+  }
+
+  /**
+   * Hands the screen to a popup, or takes it back and redraws. Handing it over waits for any
+   * draw in progress, so it can't land on top of the popup.
+   */
+  setOverlay(on: boolean): Promise<void> {
+    this.overlay = on
+    return on ? this.drawing : this.redraw()
+  }
+
+  /** Dictating a message only makes sense inside a session, where there's a message box. */
+  canDictate(): boolean {
+    return this.page?.kind === 'transcript' && !!this.state?.foreground && !this.state.locked
   }
 
   // Input ---------------------------------------------------------------------------------------
@@ -214,6 +230,7 @@ export class Mirror {
   }
 
   private async drawNow(error?: unknown): Promise<void> {
+    if (this.overlay) return
     const state = this.state
     if (error !== undefined || !state) {
       return this.showStatus(error === undefined ? 'Connecting to the bridge...' : describe(error))

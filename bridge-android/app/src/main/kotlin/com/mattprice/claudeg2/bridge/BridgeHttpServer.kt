@@ -26,9 +26,13 @@ const val LONG_POLL_MS = 25_000L
  */
 const val IDLE_CONNECTION_MS = 30_000
 
+/** The longest recording POST /voice/transcribe takes: 60 s of 16 kHz 16-bit mono. */
+const val MAX_PCM_BYTES = 60 * PCM_BYTES_PER_SECOND
+
 private val REASONS = mapOf(
     200 to "OK", 204 to "No Content", 400 to "Bad Request", 401 to "Unauthorized", 404 to "Not Found",
-    409 to "Conflict", 410 to "Gone", 500 to "Internal Server Error", 502 to "Bad Gateway",
+    409 to "Conflict", 410 to "Gone", 413 to "Payload Too Large", 500 to "Internal Server Error",
+    502 to "Bad Gateway", 503 to "Service Unavailable",
 )
 
 /** NanoHTTPD's own status enum lacks some codes the API uses, so statuses are built here. */
@@ -50,6 +54,7 @@ class BridgeHttpServer(
     private val status: () -> JSONObject = { JSONObject() },
     port: Int = BRIDGE_PORT,
     private val longPollMs: Long = LONG_POLL_MS,
+    private val transcriber: Transcriber? = null,
 ) : NanoHTTPD("127.0.0.1", port) {
 
     /**
@@ -105,9 +110,16 @@ class BridgeHttpServer(
                         else -> controller.scroll(up = true)
                     }
                     "back" -> controller.back()
+                    "send" -> controller.send(body.optString("text"))
                     else -> throw BridgeException(400, "Unknown action")
                 }
                 JSONObject()
+            }
+
+            "POST /voice/transcribe" -> {
+                val pcm = readPcm(session)
+                val speech = transcriber ?: throw BridgeException(503, "No speech recognizer on this phone")
+                JSONObject().put("text", speech.transcribe(pcm))
             }
 
             "GET /dump" -> Raw(200, "text/xml", controller.lastSnapshot?.toXml() ?: throw BridgeException(409, "Nothing captured yet"))
@@ -129,6 +141,33 @@ class BridgeHttpServer(
         session.parseBody(files)
         val raw = files["postData"]
         return if (raw.isNullOrBlank()) JSONObject() else JSONObject(raw)
+    }
+
+    /**
+     * A raw PCM body. Read in full even when it's refused: whatever is left unread would be
+     * taken as the start of the next request on the same connection.
+     */
+    private fun readPcm(session: IHTTPSession): ByteArray {
+        val length = session.headers["content-length"]?.toLongOrNull() ?: throw BridgeException(400, "Missing Content-Length")
+        val input = session.inputStream
+        if (length > MAX_PCM_BYTES) {
+            var left = length
+            val skip = ByteArray(8192)
+            while (left > 0) {
+                val n = input.read(skip, 0, minOf(skip.size.toLong(), left).toInt())
+                if (n < 0) break
+                left -= n
+            }
+            throw BridgeException(413, "Recording too long")
+        }
+        val pcm = ByteArray(length.toInt())
+        var read = 0
+        while (read < pcm.size) {
+            val n = input.read(pcm, read, pcm.size - read)
+            if (n < 0) throw BridgeException(400, "Recording cut off")
+            read += n
+        }
+        return pcm
     }
 
     private fun error(message: String?) = JSONObject().put("ok", false).put("error", message ?: "Error")

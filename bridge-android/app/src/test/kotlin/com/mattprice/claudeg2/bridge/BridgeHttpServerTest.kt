@@ -12,13 +12,20 @@ import java.net.URI
 
 const val TEST_TOKEN = "ABCDE"
 
+/** What the pretend speech recognizer hears in any recording. */
+const val FAKE_SPEECH = "List the files in src"
+
+/** Pretend speech-to-text: a fixed sentence for any recording, nothing for silence (all zeros). */
+val fakeTranscriber = Transcriber { pcm -> if (pcm.all { it == 0.toByte() }) "" else FAKE_SPEECH }
+
 /** Starts a real bridge on this machine, backed by the pretend Claude app on its session list. */
 fun startBridge(port: Int, longPollMs: Long = LONG_POLL_MS): Pair<BridgeHttpServer, FakeClaude> {
     val claude = FakeClaude()
     val controller = MirrorController(claude)
     claude.controller = controller
     claude.show("synthetic-sessions")
-    val server = BridgeHttpServer(controller, { TEST_TOKEN }, port = port, longPollMs = longPollMs).also { it.start() }
+    val server = BridgeHttpServer(controller, { TEST_TOKEN }, port = port, longPollMs = longPollMs, transcriber = fakeTranscriber)
+        .also { it.start() }
     return server to claude
 }
 
@@ -209,6 +216,54 @@ class BridgeHttpServerTest {
         assertEquals(200, connection.responseCode)
         val xml = connection.inputStream.bufferedReader().use { it.readText() }
         assertEquals(fixture("synthetic-sessions"), UiNode.fromXml(xml))
+    }
+
+    private fun postPcm(pcm: ByteArray): Reply {
+        val connection = URI("http://127.0.0.1:$port/voice/transcribe").toURL().openConnection() as HttpURLConnection
+        connection.requestMethod = "POST"
+        connection.setRequestProperty("Authorization", "Bearer $TEST_TOKEN")
+        connection.setRequestProperty("Content-Type", "application/octet-stream")
+        connection.doOutput = true
+        connection.setFixedLengthStreamingMode(pcm.size)
+        connection.outputStream.use { it.write(pcm) }
+        val status = connection.responseCode
+        val stream = if (status < 400) connection.inputStream else connection.errorStream
+        val text = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        return Reply(status, text.takeIf { it.startsWith("{") }?.let(::JSONObject), connection.getHeaderField("Access-Control-Allow-Origin"))
+    }
+
+    @Test
+    fun `a recording comes back as text, silence as nothing, and one over a minute is refused`() {
+        val speech = postPcm(ByteArray(PCM_BYTES_PER_SECOND) { (it % 7).toByte() })
+        assertEquals(200, speech.status)
+        assertEquals(FAKE_SPEECH, speech.json!!.getString("text"))
+
+        assertEquals("", postPcm(ByteArray(PCM_BYTES_PER_SECOND)).json!!.getString("text"))
+
+        val tooLong = postPcm(ByteArray(MAX_PCM_BYTES + 2))
+        assertEquals(413, tooLong.status)
+        // The whole body was read, so the connection still works for the next request.
+        assertEquals(200, call("GET", "/health").status)
+    }
+
+    @Test
+    fun `send types into the session's message box and taps Send`() {
+        claude.show("synthetic-transcript")
+        val reply = call("POST", "/action", JSONObject().put("type", "send").put("text", FAKE_SPEECH).toString())
+        assertEquals(200, reply.status)
+        assertEquals(listOf(FAKE_SPEECH), claude.sent)
+        assertEquals(listOf("Send"), claude.clicks)
+    }
+
+    @Test
+    fun `send is refused off a session, and with nothing to send`() {
+        val onList = call("POST", "/action", """{"type":"send","text":"hello"}""")
+        assertEquals(409, onList.status)
+        assertEquals("Open a session to send a message", onList.json!!.getString("error"))
+
+        claude.show("synthetic-transcript")
+        assertEquals(400, call("POST", "/action", """{"type":"send","text":"  "}""").status)
+        assertTrue(claude.sent.isEmpty())
     }
 
     @Test

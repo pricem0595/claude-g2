@@ -1,5 +1,6 @@
 package com.mattprice.claudeg2.bridge
 
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -9,6 +10,10 @@ class BridgeException(val httpStatus: Int, message: String) : Exception(message)
 
 // How long after a deliberate scroll a non-overlapping snapshot counts as part of that scroll.
 private const val SCROLL_HINT_MS = 1_500L
+
+// After typing a message, how long to wait for the Send button to show, and how often to look.
+private const val SEND_WAIT_MS = 3_000L
+private const val SEND_POLL_MS = 100L
 
 /** Where screens come from and where taps go: the accessibility service, or a fake in tests. */
 interface ScreenSource {
@@ -27,6 +32,9 @@ interface ScreenSource {
 
     /** Presses Back, while the Claude app is in front. */
     suspend fun back(): Boolean
+
+    /** Replaces the text in an editable node (the message box). Returns false if it couldn't. */
+    suspend fun setText(node: UiNode, text: String): Boolean
 }
 
 /** What the glasses get from GET /state. `version` goes up whenever anything in it changes. */
@@ -180,6 +188,29 @@ class MirrorController(private val source: ScreenSource) {
     suspend fun back() {
         requireForeground()
         if (!source.back()) throw BridgeException(502, "Back didn't go through")
+    }
+
+    /**
+     * Types [text] into the open session's message box and taps Send. The Send button only
+     * appears once there's text, so it waits for a snapshot that shows it.
+     */
+    suspend fun send(text: String, sendWaitMs: Long = SEND_WAIT_MS) {
+        requireForeground()
+        if (text.isBlank()) throw BridgeException(400, "Nothing to send")
+        if (_state.value.screen.kind != ScreenKind.TRANSCRIPT) throw BridgeException(409, "Open a session to send a message")
+        val composer = lastSnapshot?.let(ScreenParser::composer) ?: throw BridgeException(409, "No message box on screen")
+        if (!source.setText(composer, text)) throw BridgeException(502, "Couldn't type into the message box")
+
+        val until = System.currentTimeMillis() + sendWaitMs
+        while (true) {
+            val button = lastSnapshot?.let { root -> ScreenParser.composer(root)?.let { ScreenParser.sendButton(root, it) } }
+            if (button != null) {
+                if (!source.click(button)) throw BridgeException(502, "The Send tap didn't go through")
+                return
+            }
+            if (System.currentTimeMillis() >= until) throw BridgeException(502, "No Send button: the message is in the box on the phone")
+            delay(SEND_POLL_MS)
+        }
     }
 
     private fun requireForeground() {

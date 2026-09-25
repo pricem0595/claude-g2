@@ -33,6 +33,13 @@ object ClaudeUi {
         RegexOption.IGNORE_CASE,
     )
 
+    /**
+     * The button that sends what's in the message box. An empty box shows "Start speech input"
+     * and, while Claude works, "Stop" there instead; neither may ever be taken for Send. The
+     * words are a best guess until a capture with text typed in confirms them.
+     */
+    val SEND_WORDS = Regex("""^(send|send message|queue|queue message|submit)\b""", RegexOption.IGNORE_CASE)
+
     /** The app bar: anything whose top is in this fraction of the screen. */
     const val TOP_BAND = 0.12
 
@@ -53,7 +60,7 @@ object ScreenParser {
         val topBandEnd = screenTop + (root.bounds.height * ClaudeUi.TOP_BAND).toInt()
         val inTopBar = { n: UiNode -> n.bounds.bottom in 1..topBandEnd }
 
-        val composer = all.firstOrNull { it.editable }
+        val composer = composer(root)
         val main = all.filter { it.scrollable }.maxByOrNull { it.bounds.width.toLong() * it.bounds.height }
 
         fun ancestors(n: UiNode) = generateSequence(parents[n]) { parents[it] }
@@ -97,6 +104,19 @@ object ScreenParser {
         return ParsedScreen(ScreenKind.UNKNOWN, title, lines = dedupeAdjacent(blocks(root).map { it.second }))
     }
 
+    /** The message box, if the screen has one. */
+    fun composer(root: UiNode): UiNode? = root.walk().firstOrNull { it.editable }
+
+    /**
+     * The Send button beside [composer]: a control labelled like [ClaudeUi.SEND_WORDS], level
+     * with or below the top of the message box. The label is often on an icon inside the
+     * tappable part; tapping it reaches the control. Nothing drawn inside the box counts: its
+     * placeholder reads "Queue a message…".
+     */
+    fun sendButton(root: UiNode, composer: UiNode): UiNode? = root.walk()
+        .filter { it.bounds.bottom > composer.bounds.top && !contains(composer.bounds, it.bounds) }
+        .firstOrNull { n -> n.label?.let { ClaudeUi.SEND_WORDS.containsMatchIn(it) } == true }
+
     /**
      * The readable blocks under [container], top to bottom as drawn. The Claude app's list is
      * laid out bottom-up (newest item first in the tree), so tree order can't be trusted. A
@@ -116,6 +136,9 @@ object ScreenParser {
         visit(container)
         return found.sortedWith(compareBy({ it.first.bounds.top }, { it.first.bounds.left }))
     }
+
+    private fun contains(outer: Bounds, inner: Bounds) =
+        inner.left >= outer.left && inner.top >= outer.top && inner.right <= outer.right && inner.bottom <= outer.bottom
 
     private fun sortByPosition(nodes: List<UiNode>) = nodes.sortedWith(compareBy({ it.bounds.top }, { it.bounds.left }))
 

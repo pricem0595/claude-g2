@@ -2,7 +2,7 @@
   "package_id": "com.mattprice.claudeg2",
   "edition": "202601",
   "name": "Claude G2",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "min_app_version": "2.2.10",
   "min_sdk_version": "0.0.15",
   "entrypoint": "index.html",
@@ -11,6 +11,10 @@
       "name": "network",
       "desc": "Talks to the Claude G2 Bridge app running on this phone, over loopback only.",
       "whitelist": ["http://127.0.0.1:8421", "http://localhost:8421"]
+    },
+    {
+      "name": "g2-microphone",
+      "desc": "Hold the touchpad in a session to dictate a message to Claude. The recording goes only to the bridge app on this phone, which turns it into text."
     }
   ],
   "supported_languages": ["en"]

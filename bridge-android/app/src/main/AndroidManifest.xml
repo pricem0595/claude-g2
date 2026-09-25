@@ -4,6 +4,17 @@
     <!-- Opening the loopback HTTP server socket that the glasses app calls. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Only in case a speech recognizer insists on it: the audio comes from the glasses, and
+         Google's on-device recognizer works without it (Galaxy Z Fold7, Android 16). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- On Android 11+, finding the speech recognizer service needs it to be visible. -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="false"
         android:label="@string/app_name"
